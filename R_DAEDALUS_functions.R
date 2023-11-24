@@ -536,23 +536,23 @@ p2params <- function(data, inp2) {
   
   ## INITIAL DISEASE PARAMETERS:
   
-  if (inp2=='Influenza 2009'){
+  #if (inp2=='Influenza 2009'){
     dis <- p2Params_Flu2009#xx access from somewhere
-  } elseif(inp2=='Influenza 1957'){
-    dis <-  p2Params_Flu1957
-  } elseif(inp2,'Influenza 1918'){
-    dis <-  p2Params_Flu1918
-  }elseif(inp2,'Covid Wildtype'){
-    dis <-  p2Params_CovidWT
-  }elseif(inp2,'Covid Omicron'){
-    dis <-  p2Params_CovidOM;
-  }elseif(inp2,'Covid Delta'){
-    dis <-  p2Params_CovidDE 
-  }elseif(inp2,'SARS'){
-    dis <-  p2Params_SARS
-  }else{
-    stop('Unknown Disease!')
-  }
+  #} elseif(inp2=='Influenza 1957'){
+    #dis <-  p2Params_Flu1957
+  #} elseif(inp2,'Influenza 1918'){
+    #dis <-  p2Params_Flu1918
+  #}elseif(inp2,'Covid Wildtype'){
+    #dis <-  p2Params_CovidWT
+  #}elseif(inp2,'Covid Omicron'){
+    #dis <-  p2Params_CovidOM;
+  #}elseif(inp2,'Covid Delta'){
+    #dis <-  p2Params_CovidDE 
+  #}elseif(inp2,'SARS'){
+    #dis <-  p2Params_SARS
+  #}else{
+    #stop('Unknown Disease!')
+  #}
   
   #Probabilities
   phgs    <- dis$ihr./dis$ps    #4*1
@@ -645,7 +645,7 @@ p2params <- function(data, inp2) {
   ev <- eigen(J)
   r       <- max(real(ev$values))
   Td      <- log(2)/r
-  if ~exists(data$Td_CWT){
+  if (!exists(data$Td_CWT)){
     data$Td_CWT <- Td
   }
   
@@ -665,8 +665,8 @@ p2params <- function(data, inp2) {
   #Vaccine Uptake
   Npop    <- data$Npop
   NNage   <- c(Npop[1],sum(Npop[2:4]),sum(Npop[5:13]),sum(Npop[14:length(Npop)]))
-  puptake <- min(0.99*(1-NNage[1]/sum(NNage)),puptake)#population uptake cannot be greater than full coverage in non-pre-school age groups
-  up3fun  <- func(u3) puptake*sum(NNage) - u3*(NNage[2]/2 + NNage[3]) - min(1.5*u3, 1)*NNage[4]
+  puptake <- min(0.99*(1-NNage[1]/sum(NNage)), puptake)#population uptake cannot be greater than full coverage in non-pre-school age groups
+  up3fun  <- {function(u3) puptake*sum(NNage) - u3*(NNage[2]/2 + NNage[3]) - min(1.5*u3, 1)*NNage[4]}
   if (up3fun(0)*up3fun(1)<=0){
     u3  <- uniroot(up3fun, c(0, 1))#xx check same
   } else{
@@ -674,7 +674,7 @@ p2params <- function(data, inp2) {
   }
   u4      <- min(1.5*u3, 1)
   u1      <- 0
-  up2fun  <- func(u2) u2*NNage[2] + u3*NNage[3] + u4*NNage[4] - puptake*sum(NNage)
+  up2fun  <- {function(u2) u2*NNage[2] + u3*NNage[3] + u4*NNage[4] - puptake*sum(NNage)}
   u2      <- uniroot(up2fun, c(0, 1));#xx check same
   uptake  <- c(u1,u2,u3,u4);
   
@@ -716,7 +716,7 @@ p2params <- function(data, inp2) {
   }  
   data$lgh   <- c(rep(lgh[3],45), lgh)
   
-}  
+}
 
 ################################################################################
 #Prepare objects for simulation:
