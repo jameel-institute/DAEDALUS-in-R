@@ -30,4 +30,6 @@ p2Params_CovidWT <- function(){
   dis$red <- 0.58
   dis$R0  <- 2.8700
   
+  return(dis)
+  
 }

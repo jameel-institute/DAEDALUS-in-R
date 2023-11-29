@@ -1,5 +1,7 @@
 #All functions required to run DAEDALUS for p2
 
+library(pracma)
+
 ################################################################################
 #Launch simulation:
 
@@ -22,7 +24,8 @@ p2Run <- function(data, dis, Xit, p2) {
   Dvec <- array(0, dim = c(ln, ln, int))
   for (i in 1:int) {
     Dtemp <- p2MakeDs(data, NNvec[, i], XitMat[, i], data$hw[i, ])
-    Dvec[,, i] <- Dtemp
+    #Dtemp <- Dtemp$Dout
+    Dvec[,, i] <- Dtemp$Dout
   }
   data$Dvec <- Dvec
   
@@ -510,12 +513,14 @@ odes <- function(y, t, params) {
 #Make all parameters/objects:
 
 p2params <- function(data, inp2) {
-  lnn <- length(nn)
+  
+  data$alpha <- 1 #xx
   
   #Population by age:
   nn <- data$Npop
+  lnn <- length(nn)
   nn <- c(nn[1:16], sum(nn[17:lnn]))
-  nntot <- c(nn[1], sum(nn[2:4]), sum(nn[5:13]), sum(nn[14:lnn]))
+  nntot <- c(nn[1], sum(nn[2:4]), sum(nn[5:13]), sum(nn[14:length(nn)]))
   ranges <- c(1, 3, 9, 4)
   nntot <- rep.int(nntot, times=ranges)
   nnprop <- nn/nntot
@@ -530,20 +535,20 @@ p2params <- function(data, inp2) {
   data$alp <- 1
   
   #Contact matrix:
-  listOut <- R_p2MakeDs(data, data$NNs, rep(1, lx), rep(0,lx));#xx
+  listOut <- p2MakeDs(data, data$NNs, rep(1, lx), rep(0,lx));#xx
   Dout <- listOut$Dout
   data <- listOut$data
   
   ## INITIAL DISEASE PARAMETERS:
   
   #if (inp2=='Influenza 2009'){
-    dis <- p2Params_Flu2009#xx access from somewhere
+    #dis <- p2Params_Flu2009#xx access from somewhere
   #} elseif(inp2=='Influenza 1957'){
     #dis <-  p2Params_Flu1957
   #} elseif(inp2,'Influenza 1918'){
     #dis <-  p2Params_Flu1918
   #}elseif(inp2,'Covid Wildtype'){
-    #dis <-  p2Params_CovidWT
+    dis <-  p2Params_CovidWT()
   #}elseif(inp2,'Covid Omicron'){
     #dis <-  p2Params_CovidOM;
   #}elseif(inp2,'Covid Delta'){
@@ -555,16 +560,16 @@ p2params <- function(data, inp2) {
   #}
   
   #Probabilities
-  phgs    <- dis$ihr./dis$ps    #4*1
-  pdgh    <- dis$ifr./dis$ihr
+  phgs    <- dis$ihr/dis$ps    #4*1
+  pdgh    <- dis$ifr/dis$ihr
   phgs    <- accumarray(subs, phgs*nnprop)
-  dis$ph  <- c(rep(phgs(adInd),lx), phgs)
+  dis$ph  <- c(rep(phgs[adInd],lx), phgs)
   nnh     <- nn*dis$ihr
   nnhtot  <- c(nnh[1], sum(nnh[2:4]), sum(nnh[5:13]), sum(nnh[14:length(nnh)])) #1*17
   nnhtot  <- rep.int(nnhtot, times=ranges)
   nnhprop <- nnh/nnhtot
   pdgh    <- accumarray(subs, pdgh*nnhprop)
-  dis$pd  <- c(rep(pdgh(adInd),lx), pdgh)
+  dis$pd  <- c(rep(pdgh[adInd],lx), pdgh)
   
   #Durations (for each sector)
   dis$Ts = ((1-dis$ph)*dis$Tsr)   + (dis$ph*dis$Tsh)
@@ -574,9 +579,9 @@ p2params <- function(data, inp2) {
   dis$sig1 <- (1-dis$ps)/dis$Tlat  #0.088
   dis$sig2 <- dis$ps/dis$Tlat      # 0.1293
   dis$g1   <- 1/dis$Tay            # 0.4762
-  dis$g2   <- (1-dis.ph)/dis$Ts    #[49 x 1]
+  dis$g2   <- (1-dis$ph)/dis$Ts    #[49 x 1]
   dis$g3   <- (1-dis$pd)/dis$Th    #[49 x 1]
-  dis$h    <- dis$ph./dis$Ts
+  dis$h    <- dis$ph/dis$Ts
   dis$mu   <- dis$pd/dis$Th
   dis$nu   <- 1/dis$Ti
   
@@ -584,12 +589,12 @@ p2params <- function(data, inp2) {
   Deff  <- Dout*matrix(rep(data$NNs,ntot), ntot, ntot)/t(matrix(rep(data$NNs, ntot), ntot, ntot)) # [49 x 49]
   onesn <- rep(1, ntot)
   F     <- matrix(0, 3*ntot, 3*ntot); 
-  F[1:ntot,ntot+1:dim(F)[2]] <- cbind(dis$red*Deff, Deff);   # [147 x 147] #xx dis$red scalar
+  F[1:ntot,(ntot+1):dim(F)[2]] <- cbind(dis$red*Deff, Deff);   # [147 x 147] #xx dis$red scalar
   
   vvec <- c((dis$sig1+dis$sig2)*onesn, dis$g1*onesn, (dis$g2+dis$h)*onesn) #g2 and h are vectors
   V    <- diag(vvec)
-  V[ntot+1:2*ntot, 1:ntot]   <- diag(-dis$sig1*onesn)
-  V[2*ntot+1:3*ntot, 1:ntot] <- diag(-dis$sig2*onesn)
+  V[(ntot+1):(2*ntot), 1:ntot]   <- diag(-dis$sig1*onesn)
+  V[(2*ntot+1):(3*ntot), 1:ntot] <- diag(-dis$sig2*onesn)
   
   GD <- F%*%inv(V) # [147 x 147]
   ev <- eigen(GD)#largest in magnitude (+/-)  % 7.29
@@ -601,7 +606,7 @@ p2params <- function(data, inp2) {
   dis$hrv1 <- 1/28                       #time to develop v-acquired immunity
   dis$scv1 <- 0.60                       #infection-blocking efficacy
   dis$heff <- 0.87                       #severe-disease-blocking efficacy
-  dis$hv1  <- 1-((1-dis.heff)/(1-dis.scv1))  # 0.6750 probability of reduction in infection/overall VE combining severe and symptomatic infection
+  dis$hv1  <- 1-((1-dis$heff)/(1-dis$scv1))  # 0.6750 probability of reduction in infection/overall VE combining severe and symptomatic infection
   dis$trv1 <- 0.52                       #transmission-blocking efficacy %0.52
   dis$nuv1 <- 1/365                      #duration of v-acquired immunity 0.0027
   
@@ -611,7 +616,7 @@ p2params <- function(data, inp2) {
   
   ## PREPAREDNESS PARAMETERS:
   
-  p2 = struct;
+  p2 <- list()
   
   p2$t_tit <- data$t_tit                      #Test-Isolate-Trace Time
   p2$trate <- data$trate                      #Test-Isolate-Trace Rate
@@ -624,28 +629,28 @@ p2params <- function(data, inp2) {
   
   #Response Time
   J                                   <- matrix(0, 7*ntot, 7*ntot)
-  J[1:ntot, 2*ntot+1:3*ntot]          <- -dis$beta*dis$red*Dout
-  J[1:ntot, 3*ntot+1:4*ntot]          <- -dis$beta*Dout
-  J[1:ntot, 5*ntot+1:6*ntot]          <- diag(onesn*dis$nu)
-  J[ntot+1:2*ntot, 1*ntot+1:2*ntot]   <- diag(onesn*(-dis$sig1-dis$sig2))
-  J[ntot+1:2*ntot, 2*ntot+1:3*ntot]   <- dis$beta*dis$red*Dout
-  J[ntot+1:2*ntot, 3*ntot+1:4*ntot]   <- dis$beta*Dout
-  J[2*ntot+1:3*ntot, 1*ntot+1:2*ntot] <- diag(onesn*dis$sig1)
-  J[2*ntot+1:3*ntot, 2*ntot+1:3*ntot] <- diag(onesn*-dis$g1)
-  J[3*ntot+1:4*ntot, 1*ntot+1:2*ntot] <- diag(onesn*dis$sig2)
-  J[3*ntot+1:4*ntot, 3*ntot+1:4*ntot] <- diag(onesn*(-dis$g2-dis$h))
-  J[4*ntot+1:5*ntot, 3*ntot+1:4*ntot] <- diag(onesn*dis$h)
-  J[4*ntot+1:5*ntot, 4*ntot+1:5*ntot] <- diag(onesn*(-dis$g3-dis$mu))
-  J[5*ntot+1:6*ntot, 2*ntot+1:3*ntot] <- diag(onesn*dis$g1)
-  J[5*ntot+1:6*ntot, 3*ntot+1:4*ntot] <- diag(onesn*dis$g2)
-  J[5*ntot+1:6*ntot, 4*ntot+1:5*ntot] <- diag(onesn*dis$g3)
-  J[5*ntot+1:6*ntot, 5*ntot+1:6*ntot] <- diag(onesn*-dis$nu)
-  J[6*ntot+1:7*ntot, 4*ntot+1:5*ntot] <- diag(onesn*dis$mu)
+  J[1:ntot, (2*ntot+1):(3*ntot)]          <- -dis$beta*dis$red*Dout
+  J[1:ntot, (3*ntot+1):(4*ntot)]          <- -dis$beta*Dout
+  J[1:ntot, (5*ntot+1):(6*ntot)]          <- diag(onesn*dis$nu)
+  J[(ntot+1):(2*ntot), (1*ntot+1):(2*ntot)]   <- diag(onesn*(-dis$sig1-dis$sig2))
+  J[(ntot+1):(2*ntot), (2*ntot+1):(3*ntot)]   <- dis$beta*dis$red*Dout
+  J[(ntot+1):(2*ntot), (3*ntot+1):(4*ntot)]   <- dis$beta*Dout
+  J[(2*ntot+1):(3*ntot), (1*ntot+1):(2*ntot)] <- diag(onesn*dis$sig1)
+  J[(2*ntot+1):(3*ntot), (2*ntot+1):(3*ntot)] <- diag(onesn*-dis$g1)
+  J[(3*ntot+1):(4*ntot), (1*ntot+1):(2*ntot)] <- diag(onesn*dis$sig2)
+  J[(3*ntot+1):(4*ntot), (3*ntot+1):(4*ntot)] <- diag(onesn*(-dis$g2-dis$h))
+  J[(4*ntot+1):(5*ntot), (3*ntot+1):(4*ntot)] <- diag(onesn*dis$h)
+  J[(4*ntot+1):(5*ntot), (4*ntot+1):(5*ntot)] <- diag(onesn*(-dis$g3-dis$mu))
+  J[(5*ntot+1):(6*ntot), (2*ntot+1):(3*ntot)] <- diag(onesn*dis$g1)
+  J[(5*ntot+1):(6*ntot), (3*ntot+1):(4*ntot)] <- diag(onesn*dis$g2)
+  J[(5*ntot+1):(6*ntot), (4*ntot+1):(5*ntot)] <- diag(onesn*dis$g3)
+  J[(5*ntot+1):(6*ntot), (5*ntot+1):(6*ntot)] <- diag(onesn*-dis$nu)
+  J[(6*ntot+1):(7*ntot), (4*ntot+1):(5*ntot)] <- diag(onesn*dis$mu)
   
   ev <- eigen(J)
-  r       <- max(real(ev$values))
+  r       <- max(Re(ev$values))
   Td      <- log(2)/r
-  if (!exists(data$Td_CWT)){
+  if (is.null(data$Td_CWT)){
     data$Td_CWT <- Td
   }
   
@@ -669,17 +674,20 @@ p2params <- function(data, inp2) {
   up3fun  <- {function(u3) puptake*sum(NNage) - u3*(NNage[2]/2 + NNage[3]) - min(1.5*u3, 1)*NNage[4]}
   if (up3fun(0)*up3fun(1)<=0){
     u3  <- uniroot(up3fun, c(0, 1))#xx check same
+    u3 <- u3$xmin # xx check uniroot outputs
   } else{
     u3  <- fminbnd(up3fun, 0, 1)
+    u3 <- u3$xmin
   }
   u4      <- min(1.5*u3, 1)
   u1      <- 0
   up2fun  <- {function(u2) u2*NNage[2] + u3*NNage[3] + u4*NNage[4] - puptake*sum(NNage)}
   u2      <- uniroot(up2fun, c(0, 1));#xx check same
+  u2 <- u2$root
   uptake  <- c(u1,u2,u3,u4);
   
   #Vaccine Administration Rate
-  t_ages     = min((uptake.*NNage)/arate,Inf)#arate may be 0
+  t_ages     = min((uptake*NNage)/c(arate), Inf)#arate may be 0
   if (inp2=='Influenza 1918'){
     t_ages     <- c(t_ages[3], t_ages[4], t_ages[2], t_ages[1])
     p2$aratep1 <- c(0, 0, arate, 0)#Period 1 - working-age#to be split across all economic sectors in heSimCovid19vax.m
@@ -703,23 +711,27 @@ p2params <- function(data, inp2) {
   ## COST PARAMETERS:
   
   
-  n    <- c(data$Npop[1:16], sum(data$Npop[17:end]))#length is 17 to match ifr
-  la   <- c(data$la[1:16], dot(data$la[17:end], c(data$Npop(17), sum(data$Npop[18:length(Npop)])))/sum(data$Npop[17:end]))
+  na    <- c(data$Npop[1:16], sum(data$Npop[17:length(Npop)]))#length is 17 to match ifr
+  la   <- c(data$la[1:16], dot(data$la[17:length(data$la)], c(data$Npop[17], sum(data$Npop[18:length(data$Npop)])))/sum(data$Npop[17:length(data$Npop)]))
   napd <- na*dis$ifr
   lg   <- c(dot(la[1], napd[1])/sum(napd[1]), 
-            dot(la(2:4), napd(2:4))/sum(napd(2:4)), 
+            dot(la[2:4], napd[2:4])/sum(napd[2:4]), 
             dot(la[5:13], napd[5:13])/sum(napd[5:13]), 
             dot(la[14:length(la)], napd[14:length(napd)])/sum(napd[4:length(napd)]))
   
+  lgh <- rep(0,length(lg))
   for (k in 1:length(lg)){
-    lgh[k] <- sum(1/((1+0.03)^(1:lg(k))))
+    lgh[k] <- sum(1/((1+0.03)^(1:lg[k])))
   }  
   data$lgh   <- c(rep(lgh[3],45), lgh)
+  
+  return(list(data=data, dis=dis, p2=p2))
   
 }
 
 ################################################################################
 #Prepare objects for simulation:
+#NN <- data$NNs; x <- rep(1, lx); hw <- rep(0,lx)
 
 p2MakeDs <- function(data, NN, x, hw) {
   C <- data$CM
@@ -738,24 +750,25 @@ p2MakeDs <- function(data, NN, x, hw) {
   
   adInd <- 3#Adult index
   CworkRow <- C[adInd,]
-  lx <- nrow(x)#Number of sectors xx rows are sectors
+  lx <- length(x)#Number of sectors xx rows are sectors xx vector therefore "length", not "nrow"
   ln <- length(NN)
   
   NNrep <- t(matrix(rep(NN/sum(NN),ln),ln,ln))#Total population proportion matrix
-  NNrel <- NN[c(1:lx,lx+addInd)]/sum(NN[c(1:lx,lx+addInd)])#Adult proportion proportion vector
+  NNrel <- NN[c(1:lx,lx+adInd)]/sum(NN[c(1:lx,lx+adInd)])#Adult proportion proportion vector
   NNrea <- t(matrix(rep(NN[1:lx]/sum(NN[1:lx]),lx),lx,lx))#Workforce population proportion matrix
   
   #Make A:
   matA <- matrix(0,ln,ln)
-  matA[lx+1:ln,lx+1:ln] <- C
-  matA[1:lx,lx+1:ln] <- t(matrix(rep(CworkRow,lx),ln-lx,lx))
-  matA[,c(1:lx,lx+adInd)] <- matrix(rep(matA[,lx+adInd],lx+1),lx+1,lx+1)*t(matrix(rep(NNrel,ln),ln,ln))
+  matA[(lx+1):ln,(lx+1):ln] <- C
+  matA[(1:lx),(lx+1):ln] <- t(matrix(rep(CworkRow,lx),ln-lx,lx))
+  matA[,c(1:lx,lx+adInd)] <- matrix(rep(matA[,(lx+adInd)],lx+1),ln,lx+1)*t(matrix(rep(NNrel,ln),lx+1,ln))
   
   ##
   
   data$EdInd <- 41#Education sector index
-  data$hospInd <- c(32,43,44)#Hospitality sector indices
+  data$HospInd <- c(32,43,44)#Hospitality sector indices
   w <- x^(1/data$alpha)
+  w[data$EdInd] <- x[data$EdInd];
   
   if (lx==45){
     #Education:
@@ -763,17 +776,17 @@ p2MakeDs <- function(data, NN, x, hw) {
     matA[lx+2,lx+2] <- matA[lx+2,lx+2] + w[data$EdInd]^2*data$schoolA2
     
     #Hospitality:
-    psub <- data$NNs[data$HospInd]
+    psub <- data$NNs[data$HospInd, 1]
     psub <- sum(psub*x[data$HospInd])/sum(psub)#Constant from 0-1, weighted measure of how much sectors are open
-    matA[c(1:lx,lx+adInd),] <- matA[c(1:lx,lx+adInd),] + psub^2*data$hospA3*NNrep[c(1:lx,lx+adInd),]
-    matA[lx+2,] <- matA[lx+2,] + psub^2*data$hospA2*NNrep[lx+2,]
-    matA[ln,] <- matA[ln,] + psub^2*data$hospA4*NNrep[ln,]
+    matA[c(1:lx,lx+adInd),] <- matA[c(1:lx,lx+adInd),] + c(psub^2*data$hospA3)*NNrep[c(1:lx,lx+adInd),]
+    matA[lx+2,] <- matA[lx+2,] + c(psub^2*data$hospA2)*NNrep[lx+2,]
+    matA[ln,] <- matA[ln,] + c(psub^2*data$hospA4)*NNrep[ln,]
   } else{
     stop("Unknown economic configuration!")
   }
   
   #Transport:
-  matA[1:lx,1:lx] <- matA[1:lx,1:lx] + t(matrix(rep(w,lx),lx,lx))*data$traveA3[1]*NNrea*t(matrix(rep(1-hw,lx),lx,lx))#Home working has compound effect
+  matA[1:lx,1:lx] <- matA[1:lx,1:lx] + t(matrix(rep(w,lx),lx,lx))*c(data$travelA3)*NNrea*t(matrix(rep(1-hw,lx),lx,lx))#Home working has compound effect
   
   #Worker-worker and community-worker matrices:
   
@@ -782,19 +795,19 @@ p2MakeDs <- function(data, NN, x, hw) {
   valB <- valB*(1-hw)*(1-hw)
   valC <- data$C
   valC <- valC*(1-hw)
-  valB[lx+1:ln] <- rep(0,ln-lx)
-  valC[lx+1:ln] <- rep(0,ln-lx)
-  x[lx+1:ln] <- rep(0,ln-lx)
-  w[lx+1:ln] <- rep(0,ln-lx)
+  valB[(lx+1):ln] <- rep(0,ln-lx)
+  valC[(lx+1):ln] <- rep(0,ln-lx)
+  x[(lx+1):ln] <- rep(0,ln-lx)
+  w[(lx+1):ln] <- rep(0,ln-lx)
   matB <- diag(w*valB)
   matC <- t(matrix(rep(x*valC,ln),ln,ln))*NNrep
   
-  if (!exists(data,"wnorm")){
+  checkExists <- data$wnorm
+  if (is.null(checkExists)){#(!exists(data$wnorm)){
     data$wnorm <- dot(rowSums(matB + matC),NN)/sum(NN[c(1:lx,lx+adInd)])
   }
   
-  D <- matA + (data$workp/data$wnorm)%*%(matB + matC)
+  D <- matA + c(data$workp/data$wnorm)*(matB + matC)
   
-  listOut <- list("Dout" = D, "data" = data)
-  return(listOut)
+  return(list("Dout" = D, "data" = data))
 }
