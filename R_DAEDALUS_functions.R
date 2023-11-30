@@ -7,18 +7,20 @@ library(pracma)
 
 p2Run <- function(data, dis, Xit, p2) {
   
+  Xit <- xoptim #xx remove after debug
+  
   adInd <- 3
   lx <- length(data$obj) # 45 sectors
   ln <- length(data$NNs) # 49 (45 sectors + 4 age groups)
   int <- data$int # 5 time periods
   NNbar <- data$NNs # Total workforce in each sector if economy is fully open
-  XitMat <- reshape(Xit, lx, int)
+  XitMat <- Reshape(Xit, lx, int)
   WitMat <- XitMat ^ (1 / data$alp)
   WitMat[data$EdInd, ] <- XitMat[data$EdInd, ]
-  NNvec <- rep(NNbar[1:lx], times = int) * WitMat
-  NNworkSum <- sum(NNvec, 1)
-  NNvec[lx + 1:ln, ] <- rep(NNbar[lx + 1:ln], times = int)
-  NNvec[lx + adInd, ] <- sum(NNbar[1:lx, lx + adInd]) - NNworkSum
+  NNvec <- matrix(rep(NNbar[1:lx], int), lx, int) * WitMat #Actually a matrix - each column a vector NN
+  NNworkSum <- colSums(NNvec)
+  NNvec <- rbind(NNvec, matrix(rep(NNbar[(lx + 1):ln], int), (ln-lx), int))
+  NNvec[lx + adInd, ] <- sum(NNbar[c(1:lx, lx + adInd)]) - NNworkSum
   data$NNvec <- NNvec
   
   Dvec <- array(0, dim = c(ln, ln, int))
@@ -39,11 +41,13 @@ p2Run <- function(data, dis, Xit, p2) {
 
 p2SimVax <- function(data, NNvec, Dvec, dis, S0, WitMat, p2) {
   
+  S0 <- NNvec[, 1] #xx remove after debug
+  
   ntot <- length(data$NNs)
   adInd <- 3
   lx <- ntot - 4
   NNbar <- NNvec[, 1]
-  sumWorkingAge <- sum(NNbar[1:lx, lx + 3])
+  sumWorkingAge <- sum(NNbar[c(1:lx, lx + 3)])
   nc <- 20
   zn <- rep(0, ntot)
   y0 <- c(S0, rep(zn, 6), NNbar - S0, rep(zn, nc - 9), S0)
@@ -75,20 +79,22 @@ p2SimVax <- function(data, NNvec, Dvec, dis, S0, WitMat, p2) {
     
     NNnext <- NNvec[, i]  # total population in a given period i
     NNnext[lx + c(1, 2)] <- 1
-    NNnext[1:lx, lx + 3] <- NNnext[1:lx, lx + 3] / sumWorkingAge
+    NNnext[c(1:lx, lx + 3)] <- NNnext[c(1:lx, lx + 3)] / sumWorkingAge
     NNnext[ntot] <- 1 # Retired age population
     
-    p2$ratep1 <- NNnext * c(rep(p2$aratep1[3], lx, 1), p2$aratep1)
-    p2$ratep2 <- NNnext * c(rep(p2$aratep2[3], lx, 1), p2$aratep2)
-    p2$ratep3 <- NNnext * c(rep(p2$aratep3[3], lx, 1), p2$aratep3)
-    p2$ratep4 <- NNnext * c(rep(p2$aratep4[3], lx, 1), p2$aratep4)
+    p2$ratep1 <- NNnext * c(rep(p2$aratep1[3], lx), p2$aratep1)
+    p2$ratep2 <- NNnext * c(rep(p2$aratep2[3], lx), p2$aratep2)
+    p2$ratep3 <- NNnext * c(rep(p2$aratep3[3], lx), p2$aratep3)
+    p2$ratep4 <- NNnext * c(rep(p2$aratep4[3], lx), p2$aratep4)
     
     
     # Solve the ODE system
-    res <- ode(y = y0,
-               t = c(t0, tend),
-               func = p2Model,
-               parms = p2)
+    #res <- ode(y = y0,
+    #           t = c(t0, tend),
+    #           func = p2Model,
+    #           parms = p2)
+    #xx David: I *think* the above was a placeholder
+    res <- integr8(data, NNfeed, D, i, t0, tend, dis, y0, p2)
     
     # Extract the results
     Tout <- c(Tout, res$t[2:end])
@@ -197,29 +203,42 @@ p2SimVax <- function(data, NNvec, Dvec, dis, S0, WitMat, p2) {
 #Integration:
 
 integr8 <- function(data, NN0, D, i, t0, tend, dis, y0, p2) {
+  
+  NN0 <- NNvec[, 1] #xx remove after debug
+  
   ntot <- length(data$NNs)
-  params <- list(data = data, NN0 = NN0, D = D, i = i, dis = dis, p2 = p2, b0 = 2.197, b1 = 0.1838, b2 = -1.024)
-  
+  #params <- list(data = data, NN0 = NN0, D = D, i = i, dis = dis, p2 = p2, b0 = 2.197, b1 = 0.1838, b2 = -1.024)
+  #xx Copied from inside function "odes":
+  params <- list(data = data, NN0 = NN0, D = D, i = i, dis = dis, p2 = p2, ntot = length(data$NNs), 
+                 b0 = 2.197, b1 = 0.1838, b2 = -1.024, phi = 1, betamod = 1 )
+
+################################
   # Define the ODE function
-  odes <- function(y, t, params) {
-    ode(y, t, params)
-  }
+  toSolve  <- {function(t, y, params) odes(y, t, params=params)}#deSolve/ode
+  #toSolve  <- {function(y, t) odes(y, t, params=params)}#pracma/ode45
   
+  #xx vector feed to "ode" (deSolve)??
   # Solve the ODEs
-  yout <- ode(y = y0, times = seq(t0, tend, by = 0.1), func = odes, parms = params)
+  #yout <- ode(y = y0, times = seq(t0, tend, by = 0.1), odes, params = params) #deSolve/ode
+  yout <- ode(y = y0, times = seq(t0, tend, by = 0.1), toSolve, params)#, params = params) #deSolve/ode
+  #yout <- ode45(toSolve, t0, tend, y0) #pracma/ode45
   
   tout <- yout[, "time"]
-  y0new <- tail(yout, n = 1)[, -1] 
+  y0new <- tail(yout, n = 1)[, -1]
+  yout <- as.matrix(yout[, -1])
+  ################################
   
   # Output
-  Iclass <- rowSums(yout[, (2*ntot + 1):(3*ntot)] + yout[, (3*ntot + 1):(4*ntot)] + ...)
-  Isaclass = rowSums(yout[, (3*ntot+ 1): (4*ntot)] + yout[, (12*ntot + 1): (13*ntot) ] )
-  Issclass = rowSums( yout[, (5*ntot+1): (6*ntot)] + yout[, (14*ntot+1) : (15*ntot) ] )
-  Insclass = rowSums ( yout[, (4*ntot+1): (5*ntot)] + yout[, (13*ntot+1) : (14*ntot) ] ) 
-  Hclass   = rowSums (yout [,  (6*ntot+1): (7*ntot)] + yout[, (15*ntot+1) :(16*ntot) ] )
-  Dclass   = rowSums (yout [, (17*ntot+1) : (18*ntot) ] )
-  Vclass   =  rowSums (yout [, (18*ntot+1) : (19*ntot) ] )
-  
+  Iclass <- yout[, (2*ntot + 1):(3*ntot)] + yout[, (3*ntot + 1):(4*ntot)]
+                      + yout[, (4*ntot + 1):(5*ntot)] + yout[, (5*ntot + 1):(6*ntot)]
+                      + yout[, (11*ntot + 1):(12*ntot)] + yout[, (12*ntot + 1):(13*ntot)]
+                      + yout[, (13*ntot + 1):(14*ntot)] + yout[, (14*ntot + 1):(15*ntot)]
+  Isaclass <- yout[, (3*ntot+ 1): (4*ntot)] + yout[, (12*ntot + 1): (13*ntot) ]
+  Issclass <- yout[, (5*ntot+1): (6*ntot)] + yout[, (14*ntot+1) : (15*ntot) ]
+  Insclass <- yout[, (4*ntot+1): (5*ntot)] + yout[, (13*ntot+1) : (14*ntot) ] 
+  Hclass   <- yout [,  (6*ntot+1): (7*ntot)] + yout[, (15*ntot+1) :(16*ntot) ]
+  Dclass   <- yout [, (17*ntot+1) : (18*ntot) ]
+  Vclass   <-  yout [, (18*ntot+1) : (19*ntot) ]
   
   # Time - dependent parameters
   
@@ -228,6 +247,7 @@ integr8 <- function(data, NN0, D, i, t0, tend, dis, y0, p2) {
   SHmax <- p2$SHmax
   th0 <- pmax(1, 1 + 1.87 * ((occ - Hmax) / (SHmax - Hmax)))
   
+  #xx debug to here - dimensions of time/secoor not consistent
   pd <- pmin(th0 * dis$pd, 1)
   Th <- (1 - pd) * dis$Threc + pd * dis$Thd
   mu <- pd / Th
@@ -308,9 +328,6 @@ integr8 <- function(data, NN0, D, i, t0, tend, dis, y0, p2) {
 
 odes <- function(y, t, params) {
   
-  params <- list(data = data, NN0 = NN0, D = D, i = i, dis = dis, p2 = p2, ntot = length(NNs), 
-                 b0 = 2.197, b1 = 0.1838, b2 = -1.024, phi = 1, betamod = 1 )
-  
   S <- y[1:ntot]
   E <- y[(ntot + 1):(2 * ntot)]
   Ina <- y[(2 * ntot + 1):(3 * ntot)]
@@ -390,9 +407,12 @@ odes <- function(y, t, params) {
   pend    <- p2$end
   
   ratep1 <- p2$ratep1
-  ratep2 <- p2.ratep2
-  ratep3 <- p2.ratep3
-  ratep4 <- p2.ratep4
+  ratep2 <- p2$ratep2
+  ratep3 <- p2$ratep3
+  ratep4 <- p2$ratep4
+  
+  phi <- params$phi
+  betamod <- params$betamod
   
   # Force of Infection; phi = 1 in params; betamod = 1 in params
   
@@ -404,10 +424,10 @@ odes <- function(y, t, params) {
   
   
   I <- (red * Ina + Ins) + (1 - trv1) * (red * Inav1 + Insv1)
-  foi <- phi * beta * betamod * (D * (I / NN0))
+  foi <- phi * beta * betamod * (D %*% (I / NN0))
   
   seedvec <- rep(10^-15 * sum(data$Npop), ntot)
-  seed <- phi * beta * betamod * (D * (seedvec / NN0))
+  seed <- phi * beta * betamod * (D %*% (seedvec / NN0))
   
   # Self-Isolation
   
@@ -493,20 +513,19 @@ odes <- function(y, t, params) {
   Hdot        <-      (h*Ins)   + (qh*Iss)  - (g3+mu)*H
   Hv1dot      <-      (h_v1*Insv1) + (qh_v1*Issv1) - (g3+mu)*Hv1
   Rdot        <-      (g1*Ina)  + (qg1*Isa) + (g2*Ins)  + (qg2*Iss)   + (g3*H ) - (nu*R)  -v1rater
-  Rv1dot      <-      (g1*Inav1) + (qg1*Isav1)  + (g2_v1 * Insv1 )  + (qg2_v1.*Issv1)  + (g3*Hv1)  + v1rater  
+  Rv1dot      <-      (g1*Inav1) + (qg1*Isav1)  + (g2_v1 * Insv1 )  + (qg2_v1*Issv1)  + (g3*Hv1)  + v1rater  
   DEdot       <-      (mu*H )    + (mu*Hv1)
-  
   
   f <- c(Sdot, Edot, Inadot, Isadot, Insdot, Issdot, Hdot, Rdot, Shv1dot, Sv1dot, 
          Ev1dot, Inav1dot, Isav1dot, Insv1dot, Issv1dot, Hv1dot, Rv1dot, DEdot, Vdot, Sndot)
   
   # Keeping only the positives
-  f <- pmax(f, 0) 
+  f[which(y<0)] <- pmax(f[which(y<0)], 0) #xx eps
   
   # for g
   g <- h * (Ins + Iss) + h_v1 * (Insv1 + Issv1)
   
-  return(list(f, g))
+  return(list(f))#, g #xx
 }
 
 ################################################################################
