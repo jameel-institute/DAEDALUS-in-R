@@ -242,13 +242,14 @@ integr8 <- function(data, NN0, D, i, t0, tend, dis, y0, p2) {
   
   # Time - dependent parameters
   
-  occ <- pmax(1, rowSums(Hclass))
+  occ <- pmax(1, rowSums(Hclass)) #Total occupancy (t)
   Hmax <- p2$Hmax
   SHmax <- p2$SHmax
   th0 <- pmax(1, 1 + 1.87 * ((occ - Hmax) / (SHmax - Hmax)))
   
-  #xx debug to here - dimensions of time/secoor not consistent
-  pd <- pmin(th0 * dis$pd, 1)
+  locc <- length(occ)
+  pd <- pmin(th0 * t(matrix(rep(dis$pd, locc), ln, locc)), 1) 
+  
   Th <- (1 - pd) * dis$Threc + pd * dis$Thd
   mu <- pd / Th
   ddk <- 10^5 * rowSums(mu * Hclass) / sum(NN0)
@@ -297,14 +298,18 @@ integr8 <- function(data, NN0, D, i, t0, tend, dis, y0, p2) {
   Inav1 <- yout[, (11*ntot+1):(12*ntot)]
   Isav1 <- yout[, (12*ntot+1):(13*ntot)]
   
-  Ip  <-  10^5*sum(Ina+Ins+Isa+Iss+Inav1+Insv1+Isav1+Issv1,2)/sum(NN0)
-  trate <- p2$trate
+  Ip  <-  10^5*rowSums(Ina+Ins+Isa+Iss+Inav1+Insv1+Isav1+Issv1)/sum(NN0)
+  trate <- c(p2$trate)
+  t_tit <- c(p2$t_tit)
   
-  pout <- ifelse(i != 5, 
-                 (Ip < trate) * (1 / (1 + exp(b0 + b1 * Ip + b2 * log10(trate)))) / p2$dur + 
-                   (Ip >= trate) * pmin(1 / (1 + exp(b0 + b1 * Ip + b2 * log10(trate))), trate / 10^5) / p2$dur * 
-                   (tout > p2$t_tit) * (tout < p2$end), 
-                 rep(0, length(tout)))
+  #xx Check this whole iffy statement
+  if (i != 5){
+      pout <- as.numeric(Ip<trate) * (1 / (1 + exp(params$b0 + params$b1 * Ip + params$b2 * log10(trate)))) / p2$dur +
+        as.numeric(Ip >= trate) * pmin(1 / (1 + exp(params$b0 + params$b1 * Ip + params$b2 * log10(trate))), trate / 10^5) / p2$dur 
+      pout <- pout*as.numeric(tout > t_tit && tout < p2$end)# * which(tout < p2$end)
+  }else{
+    pout <- rep(0, length(tout))
+  }
   
   results <- list(
     tout = tout,
@@ -533,7 +538,7 @@ odes <- function(y, t, params) {
 
 p2params <- function(data, inp2) {
   
-  data$alpha <- 1 #xx
+  data$alpha <- 1 #xx Check not defined elsewhere
   
   #Population by age:
   nn <- data$Npop
@@ -554,14 +559,14 @@ p2params <- function(data, inp2) {
   data$alp <- 1
   
   #Contact matrix:
-  listOut <- p2MakeDs(data, data$NNs, rep(1, lx), rep(0,lx));#xx
+  listOut <- p2MakeDs(data, data$NNs, rep(1, lx), rep(0,lx))
   Dout <- listOut$Dout
   data <- listOut$data
   
   ## INITIAL DISEASE PARAMETERS:
   
   #if (inp2=='Influenza 2009'){
-    #dis <- p2Params_Flu2009#xx access from somewhere
+    #dis <- p2Params_Flu2009
   #} elseif(inp2=='Influenza 1957'){
     #dis <-  p2Params_Flu1957
   #} elseif(inp2,'Influenza 1918'){
@@ -692,7 +697,7 @@ p2params <- function(data, inp2) {
   puptake <- min(0.99*(1-NNage[1]/sum(NNage)), puptake)#population uptake cannot be greater than full coverage in non-pre-school age groups
   up3fun  <- {function(u3) puptake*sum(NNage) - u3*(NNage[2]/2 + NNage[3]) - min(1.5*u3, 1)*NNage[4]}
   if (up3fun(0)*up3fun(1)<=0){
-    u3  <- uniroot(up3fun, c(0, 1))#xx check same
+    u3  <- uniroot(up3fun, c(0, 1))#xx Check same
     u3 <- u3$xmin # xx check uniroot outputs
   } else{
     u3  <- fminbnd(up3fun, 0, 1)
@@ -701,7 +706,7 @@ p2params <- function(data, inp2) {
   u4      <- min(1.5*u3, 1)
   u1      <- 0
   up2fun  <- {function(u2) u2*NNage[2] + u3*NNage[3] + u4*NNage[4] - puptake*sum(NNage)}
-  u2      <- uniroot(up2fun, c(0, 1));#xx check same
+  u2      <- uniroot(up2fun, c(0, 1));#xx Check same
   u2 <- u2$root
   uptake  <- c(u1,u2,u3,u4);
   
