@@ -1,6 +1,7 @@
 #All functions required to run DAEDALUS for p2
 
 library(pracma)
+library(fastmatrix)
 
 ################################################################################
 #Launch simulation:
@@ -97,13 +98,14 @@ p2SimVax <- function(data, NNvec, Dvec, dis, S0, WitMat, p2) {
     res <- integr8(data, NNfeed, D, i, t0, tend, dis, y0, p2)
     
     # Extract the results
-    Tout <- c(Tout, res$t[2:end])
-    Iout <- c(Iout, res$y[2:end, 1])
-    Isaout <- c(Isaout, res$y[2:end, 2])
-    Issout <- c(Issout, res$y[2:end, 3])
-    Insout <- c(Insout, res$y[2:end, 4])
-    Hout <- c(Hout, res$y[2:end, 5])
-    Dout <- c(Dout, res$y[2:end, 6])
+    end <- length(res$Tout)
+    Tout <- c(Tout, res$Tout[2:end])
+    Iout <- rbind(Iout, res$Iclass[2:end, ])
+    Isaout <- rbind(Isaout, res$Isaout[2:end, ])
+    Issout <- rbind(Issout, res$Issout[2:end, ])
+    Insout <- rbind(Insout, res$Insout[2:end, ])
+    Hout <- rbind(Hout, res$Hout[2:end, ])
+    Dout <- rbind(Dout, res$Dout[2:end, ])
     
     # Calculate the workforce
     W <- Wit * matrix(1, ncol = lx)
@@ -114,24 +116,24 @@ p2SimVax <- function(data, NNvec, Dvec, dis, S0, WitMat, p2) {
     hwout <- rbind(hwout, hw[1:(nrow(W) - 1), ]) 
     
     # vaccination coverage
-    poutout <- c(poutout, res$y[2:end, 19])
+    poutout <- c(poutout, res$pout[2:end])
     
     # transmission modifier
-    betamodout <- c(betamodout, res$y[2:end, 20])
+    betamodout <- c(betamodout, res$betamod[2:end])
     
     # vaccination uptake
-    Vout <- c(Vout, res$y[2:end, 17])
+    Vout <- c(Vout, res$Vclass[2:end, ])
     
     
     # Update the workforce and worker hours for the next time period
     
     if (i < data$int) {
       
-      y0 <- reshape(y0, ntot, nc)
+      y0 <- matrix(y0, ntot, nc)
       
       # Calculate the number of extra workers needed next period
       Xh2w <- NNvec[1:lx, i + 1] - NNvec[1:lx, i]
-      
+      Xw2h <- -Xh2w
       
       # Set the negative elements of Xh2w and Xw2h to zero
       Xh2w[Xh2w < 0] <- 0
@@ -150,16 +152,16 @@ p2SimVax <- function(data, NNvec, Dvec, dis, S0, WitMat, p2) {
       Xw2h[NNvec[1:lx, i] == 0] <- 0
       
       # Calculate the number of people to be put at home
-      y0w2h <- y0[1:lx, ] * matrix(Xw2h, nrow = 1, ncol = nc)
+      y0w2h <- y0[1:lx, ] * matrix(rep(Xw2h, nc), nrow = lx, ncol = nc)
       
       # Add the people to be put at home to the non-working population and subtract them from the workforce
-      y0w2h <- c(-y0w2h, sum(y0w2h, 1))
+      y0w2h <- c(-y0w2h, colSums(y0w2h))
       
       # Calculate the number of people to be put at work
-      y0h2w <- kron(y0[lx + adInd, ], Xh2w)
+      #y0h2w <- kronecker.prod(y0[lx + adInd, ], matrix(Xh2w, lx, 1))
       
       # Add the people to be put at work to the workforce and subtract them from the non-working population
-      y0h2w <- c(y0h2w, -sum(y0h2w, 1))
+      y0h2w <- c(y0h2w, -colSums(y0h2w))
       
       # Update the y0 vector
       y0[1:lx, ] <- y0[1:lx, ] + y0w2h
@@ -204,14 +206,14 @@ p2SimVax <- function(data, NNvec, Dvec, dis, S0, WitMat, p2) {
 
 integr8 <- function(data, NN0, D, i, t0, tend, dis, y0, p2) {
   
-  NN0 <- NNvec[, 1] #xx remove after debug
+  #NN0 <- NNvec[, 1] #xx remove after debug
   
   ntot <- length(data$NNs)
   #params <- list(data = data, NN0 = NN0, D = D, i = i, dis = dis, p2 = p2, b0 = 2.197, b1 = 0.1838, b2 = -1.024)
   #xx Copied from inside function "odes":
   params <- list(data = data, NN0 = NN0, D = D, i = i, dis = dis, p2 = p2, ntot = length(data$NNs), 
                  b0 = 2.197, b1 = 0.1838, b2 = -1.024, phi = 1, betamod = 1 )
-
+  
 ################################
   # Define the ODE function
   toSolve  <- {function(t, y, params) odes(y, t, params=params)}#deSolve/ode
@@ -418,6 +420,7 @@ odes <- function(y, t, params) {
   
   phi <- params$phi
   betamod <- params$betamod
+  NN0 <- params$NN0
   
   # Force of Infection; phi = 1 in params; betamod = 1 in params
   
