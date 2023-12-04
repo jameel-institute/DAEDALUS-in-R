@@ -1,7 +1,7 @@
 #All functions required to run DAEDALUS for p2
 
 library(pracma)
-library(fastmatrix)
+#library(fastmatrix)
 
 ################################################################################
 #Launch simulation:
@@ -51,19 +51,20 @@ p2SimVax <- function(data, NNvec, Dvec, dis, S0, WitMat, p2) {
   sumWorkingAge <- sum(NNbar[c(1:lx, lx + 3)])
   nc <- 20
   zn <- rep(0, ntot)
+  znMat <- matrix(zn, 1, ntot)
   y0 <- c(S0, rep(zn, 6), NNbar - S0, rep(zn, nc - 9), S0)
   Tout <- data$tvec[1]
-  Iout <- zn
-  Isaout <- zn
-  Issout <- zn
-  Insout <- zn
-  Hout <- zn
-  Dout <- zn
-  Wout <- matrix(0, nrow = 0, ncol = lx)
-  hwout <- matrix(0, nrow = 0, ncol = lx)
+  Iout <- znMat
+  Isaout <- znMat
+  Issout <- znMat
+  Insout <- znMat
+  Hout <- znMat
+  Dout <- znMat
+  Wout <- matrix(0, 0, lx)#matrix(0, nrow = 0, ncol = lx)
+  hwout <- matrix(0, 0, lx)#matrix(0, nrow = 0, ncol = lx)
   poutout <- 0
   betamodout <- 1
-  Vout <- zn
+  Vout <- znMat
   rout <- 0
   
   # Loop
@@ -98,21 +99,21 @@ p2SimVax <- function(data, NNvec, Dvec, dis, S0, WitMat, p2) {
     res <- integr8(data, NNfeed, D, i, t0, tend, dis, y0, p2)
     
     # Extract the results
-    end <- length(res$Tout)
-    Tout <- c(Tout, res$Tout[2:end])
+    end <- length(res$tout)
+    Tout <- c(Tout, res$tout[2:end])
     Iout <- rbind(Iout, res$Iclass[2:end, ])
-    Isaout <- rbind(Isaout, res$Isaout[2:end, ])
-    Issout <- rbind(Issout, res$Issout[2:end, ])
-    Insout <- rbind(Insout, res$Insout[2:end, ])
-    Hout <- rbind(Hout, res$Hout[2:end, ])
-    Dout <- rbind(Dout, res$Dout[2:end, ])
+    Isaout <- rbind(Isaout, res$Isaclass[2:end, ])
+    Issout <- rbind(Issout, res$Issclass[2:end, ])
+    Insout <- rbind(Insout, res$Insclass[2:end, ])
+    Hout <- rbind(Hout, res$Hclass[2:end, ])
+    Dout <- rbind(Dout, res$Dclass[2:end, ])
     
     # Calculate the workforce
-    W <- Wit * matrix(1, ncol = lx)
+    W <- t(matrix(rep(Wit, end), lx, end)) * matrix(1, end, lx)
     Wout <- rbind(Wout, W[1:(nrow(W) - 1), ])
     
     # worker hours
-    hw <- data$hw[i, ] * matrix(1, ncol = lx)
+    hw <- t(matrix(rep(data$hw[i, ], end), lx, end)) * matrix(1, end, lx)
     hwout <- rbind(hwout, hw[1:(nrow(W) - 1), ]) 
     
     # vaccination coverage
@@ -122,8 +123,7 @@ p2SimVax <- function(data, NNvec, Dvec, dis, S0, WitMat, p2) {
     betamodout <- c(betamodout, res$betamod[2:end])
     
     # vaccination uptake
-    Vout <- c(Vout, res$Vclass[2:end, ])
-    
+    Vout <- rbind(Vout, res$Vclass[2:end, ])
     
     # Update the workforce and worker hours for the next time period
     
@@ -155,19 +155,20 @@ p2SimVax <- function(data, NNvec, Dvec, dis, S0, WitMat, p2) {
       y0w2h <- y0[1:lx, ] * matrix(rep(Xw2h, nc), nrow = lx, ncol = nc)
       
       # Add the people to be put at home to the non-working population and subtract them from the workforce
-      y0w2h <- c(-y0w2h, colSums(y0w2h))
+      y0w2h <- rbind(-y0w2h, colSums(y0w2h))
       
       # Calculate the number of people to be put at work
-      #y0h2w <- kronecker.prod(y0[lx + adInd, ], matrix(Xh2w, lx, 1))
+      #y0h2w <- kronecker.prod(y0[lx + adInd, ], Xh2w) #xx
+      y0h2w <- t(matrix(rep(y0[lx + adInd, ], lx), nc, lx)) * matrix(rep(Xh2w, nc), lx, nc)
       
       # Add the people to be put at work to the workforce and subtract them from the non-working population
-      y0h2w <- c(y0h2w, -colSums(y0h2w))
+      y0h2w <- rbind(y0h2w, -colSums(y0h2w))
       
       # Update the y0 vector
-      y0[1:lx, ] <- y0[1:lx, ] + y0w2h
-      y0[lx + adInd, ] <- y0[lx + adInd, ] + y0h2w
+      y0[c(1:lx, lx+adInd), ] <- y0[c(1:lx, lx+adInd), ] + y0w2h + y0h2w
+      #y0[lx + adInd, ] <- y0[lx + adInd, ] + y0h2w #xx
       
-      y0 = reshape(y0,ntot*nc,1)
+      y0 = c(y0)
       
     }
     
@@ -178,7 +179,7 @@ p2SimVax <- function(data, NNvec, Dvec, dis, S0, WitMat, p2) {
   Wout <- rbind(Wout, Wout[nrow(Wout), ])
   
   hwout <- rbind(hwout, hwout[nrow(hwout), ])
-  
+
   # Create a new matrix `g` that stores results of the ODE 
   g <- cbind(Tout, Wout, hwout, Isaout, Issout, Insout, Hout, Dout, Vout, betamodout)
   
@@ -206,7 +207,7 @@ p2SimVax <- function(data, NNvec, Dvec, dis, S0, WitMat, p2) {
 
 integr8 <- function(data, NN0, D, i, t0, tend, dis, y0, p2) {
   
-  #NN0 <- NNvec[, 1] #xx remove after debug
+  #NN0 <- NNfeed#NNvec[, 1] #xx remove after debug
   
   ntot <- length(data$NNs)
   #params <- list(data = data, NN0 = NN0, D = D, i = i, dis = dis, p2 = p2, b0 = 2.197, b1 = 0.1838, b2 = -1.024)
@@ -222,7 +223,7 @@ integr8 <- function(data, NN0, D, i, t0, tend, dis, y0, p2) {
   #xx vector feed to "ode" (deSolve)??
   # Solve the ODEs
   #yout <- ode(y = y0, times = seq(t0, tend, by = 0.1), odes, params = params) #deSolve/ode
-  yout <- ode(y = y0, times = seq(t0, tend, by = 0.1), toSolve, params)#, params = params) #deSolve/ode
+  yout <- ode(y = y0, times = seq(t0, tend, by = 1), toSolve, params, method="ode45")#, params = params) #deSolve/ode
   #yout <- ode45(toSolve, t0, tend, y0) #pracma/ode45
   
   tout <- yout[, "time"]
@@ -257,7 +258,7 @@ integr8 <- function(data, NN0, D, i, t0, tend, dis, y0, p2) {
   ddk <- 10^5 * rowSums(mu * Hclass) / sum(NN0)
   
   sd_fun <- function(l, b, x) {
-    (l - b) + (1 - l + b) * (1 + ((l - 1) / (1 - l + b)))^(x / 10)
+    c((l - b) + (1 - l + b) * (1 + ((l - 1) / (1 - l + b))))^(x / 10) #xx c() added
   }
   
   # betamod 
@@ -334,6 +335,7 @@ integr8 <- function(data, NN0, D, i, t0, tend, dis, y0, p2) {
 #ODEs:
 
 odes <- function(y, t, params) {
+  ntot <- params$ntot
   
   S <- y[1:ntot]
   E <- y[(ntot + 1):(2 * ntot)]
@@ -421,6 +423,7 @@ odes <- function(y, t, params) {
   phi <- params$phi
   betamod <- params$betamod
   NN0 <- params$NN0
+  D <- params$D
   
   # Force of Infection; phi = 1 in params; betamod = 1 in params
   
@@ -436,6 +439,7 @@ odes <- function(y, t, params) {
   
   seedvec <- rep(10^-15 * sum(data$Npop), ntot)
   seed <- phi * beta * betamod * (D %*% (seedvec / NN0))
+
   
   # Self-Isolation
   
@@ -449,9 +453,9 @@ odes <- function(y, t, params) {
     #b0    = 2.197
     #b1    = 0.1838
     #b2    = -1.024
-    p3  <- (Ip<trate) *   (1/(1+exp(b0+ (b1*Ip) + (b2*log10(trate)))))/dur + ...
-    (Ip>=trate)*min(1 / (1+exp(b0+ (b1*Ip) + (b2*log10(trate)))),trate/10^5)/dur
-    p4    <- p3
+    p3  <- c(as.numeric(Ip<trate) *   (1/(1+exp(params$b0+ (params$b1*Ip) + (params$b2*log10(trate)))))/dur +
+           as.numeric(Ip>=trate)*min(1 / (1+exp(params$b0+ (params$b1*Ip) + (params$b2*log10(trate)))),trate/10^5)/dur)
+    p4    <- c(p3)
     
   } else {
     p3 <- rep(0, ntot)
@@ -715,7 +719,7 @@ p2params <- function(data, inp2) {
   
   #Vaccine Administration Rate
   t_ages     = min((uptake*NNage)/c(arate), Inf)#arate may be 0
-  if (inp2=='Influenza 1918'){
+  if (inp2=="Influenza 1918"){
     t_ages     <- c(t_ages[3], t_ages[4], t_ages[2], t_ages[1])
     p2$aratep1 <- c(0, 0, arate, 0)#Period 1 - working-age#to be split across all economic sectors in heSimCovid19vax.m
     p2$aratep2 <- c(0, 0, 0, arate)#Period 2 - retired-age

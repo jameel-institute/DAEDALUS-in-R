@@ -24,7 +24,7 @@ library(R.matlab)
 library(pracma)
 library(deSolve)
 library(ggplot2)
-library(fastmatrix)
+#library(fastmatrix)
 
 ################################################################################
 #Single run inputs - literally everything you need to change is in this block!
@@ -66,8 +66,11 @@ dis <- listOut$dis
 p2 <- listOut$p2
 
 #xx Missing info
-p2$startp2 <- p2$startp1+1; p2$startp3 <- p2$startp2+1; p2$startp4 <- p2$startp3+1; p2$startp5 <- p2$startp4+1; p2$end <- p2$startp5+1
-
+p2$startp2 <- data$tvec[2]#p2$startp1+1; 
+p2$startp3 <- data$tvec[3]#p2$startp2+1; 
+p2$startp4 <- data$tvec[4]#p2$startp3+1; 
+p2$startp5 <- data$tvec[5]#p2$startp4+1; 
+p2$end <- data$tvec[6]#p2$startp5+1
 
 #xoptim     <- cbind(matrix(1, lx, 2), matrix(0.5, lx, 1), matrix(1, lx, 2))
 xoptim <- c(rep(1, lx), rep(1, lx), rep(.5, lx), rep(1, lx), rep(1, lx))
