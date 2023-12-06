@@ -79,7 +79,10 @@ data$imand <- Inf #No social distancing in period 1, but continues until end
 #data.imand is the index of the configuration with a stay at home (SAH) order
 
 
-[data,f,g] = p2Run(data, dis, xoptim, p2)
+listOut <- p2Run(data, dis, xoptim, p2)
+data <- listOut$data
+f <- listOut$f
+g <- listOut$g
 
 #Still to translate:
 

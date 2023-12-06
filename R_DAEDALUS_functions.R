@@ -8,8 +8,6 @@ library(pracma)
 
 p2Run <- function(data, dis, Xit, p2) {
   
-  Xit <- xoptim #xx remove after debug
-  
   adInd <- 3
   lx <- length(data$obj) # 45 sectors
   ln <- length(data$NNs) # 49 (45 sectors + 4 age groups)
@@ -31,8 +29,10 @@ p2Run <- function(data, dis, Xit, p2) {
     Dvec[,, i] <- Dtemp$Dout
   }
   data$Dvec <- Dvec
+  data$lx <- lx
   
-  data <- p2SimVax(data, NNvec, Dvec, dis, NNvec[, 1], WitMat, p2)
+  #data <- p2SimVax(data, NNvec, Dvec, dis, NNvec[, 1], WitMat, p2) #xx S0 moved to p2SimVax
+  data <- p2SimVax(data, NNvec, Dvec, dis, WitMat, p2)
   
   return(data)
 }
@@ -40,13 +40,14 @@ p2Run <- function(data, dis, Xit, p2) {
 ################################################################################
 #Simulation:
 
-p2SimVax <- function(data, NNvec, Dvec, dis, S0, WitMat, p2) {
+#p2SimVax <- function(data, NNvec, Dvec, dis, S0, WitMat, p2) {
+p2SimVax <- function(data, NNvec, Dvec, dis, WitMat, p2) {
   
-  S0 <- NNvec[, 1] #xx remove after debug
+  S0 <- NNvec[, 1]
   
   ntot <- length(data$NNs)
   adInd <- 3
-  lx <- ntot - 4
+  lx <- data$lx
   NNbar <- NNvec[, 1]
   sumWorkingAge <- sum(NNbar[c(1:lx, lx + 3)])
   nc <- 20
@@ -89,6 +90,7 @@ p2SimVax <- function(data, NNvec, Dvec, dis, S0, WitMat, p2) {
     p2$ratep3 <- NNnext * c(rep(p2$aratep3[3], lx), p2$aratep3)
     p2$ratep4 <- NNnext * c(rep(p2$aratep4[3], lx), p2$aratep4)
     
+    #browser(expr = {i==2})
     
     # Solve the ODE system
     #res <- ode(y = y0,
@@ -184,19 +186,19 @@ p2SimVax <- function(data, NNvec, Dvec, dis, S0, WitMat, p2) {
   g <- cbind(Tout, Wout, hwout, Isaout, Issout, Insout, Hout, Dout, Vout, betamodout)
   
   f <- cbind(Tout,
-             sum(Iout, 2),
-             sum(Hout, 2),
-             sum(Dout, 2),
+             rowSums(Iout),
+             rowSums(Hout),
+             rowSums(Dout),
              poutout,
              betamodout,
-             sum(Vout[,(lx + 1)], 2),
-             sum(Vout[,(lx + 2)], 2),
-             sum(Vout[, c(1:lx, lx + 3)], 2),
-             sum(Vout[,(lx + 4)], 2),
-             sum(Dout[,(lx + 1)], 2),
-             sum(Dout[,(lx + 2)], 2),
-             sum(Dout[, c(1:lx, lx + 3)], 2),
-             sum(Dout[,(lx + 4)], 2))
+             Vout[,(lx + 1)],
+             Vout[,(lx + 2)],
+             rowSums(Vout[, c(1:lx, lx + 3)]),
+             Vout[,(lx + 4)],
+             Dout[,(lx + 1)],
+             Dout[,(lx + 2)],
+             rowSums(Dout[, c(1:lx, lx + 3)]),
+             Dout[,(lx + 4)])
   
   return(list(f = f, g = g))
   
@@ -207,22 +209,21 @@ p2SimVax <- function(data, NNvec, Dvec, dis, S0, WitMat, p2) {
 
 integr8 <- function(data, NN0, D, i, t0, tend, dis, y0, p2) {
   
-  #NN0 <- NNfeed#NNvec[, 1] #xx remove after debug
-  
   ntot <- length(data$NNs)
   #params <- list(data = data, NN0 = NN0, D = D, i = i, dis = dis, p2 = p2, b0 = 2.197, b1 = 0.1838, b2 = -1.024)
   #xx Copied from inside function "odes":
   params <- list(data = data, NN0 = NN0, D = D, i = i, dis = dis, p2 = p2, ntot = length(data$NNs), 
-                 b0 = 2.197, b1 = 0.1838, b2 = -1.024, phi = 1, betamod = 1 )
+                 b0 = 2.197, b1 = 0.1838, b2 = -1.024, phi = 1, betamod = 1, i = i )
   
 ################################
   # Define the ODE function
   toSolve  <- {function(t, y, params) odes(y, t, params=params)}#deSolve/ode
   #toSolve  <- {function(y, t) odes(y, t, params=params)}#pracma/ode45
   
-  #xx vector feed to "ode" (deSolve)??
+  #xx Vector feed to "ode" (deSolve)??
   # Solve the ODEs
   #yout <- ode(y = y0, times = seq(t0, tend, by = 0.1), odes, params = params) #deSolve/ode
+  
   yout <- ode(y = y0, times = seq(t0, tend, by = 1), toSolve, params, method="ode45")#, params = params) #deSolve/ode
   #yout <- ode45(toSolve, t0, tend, y0) #pracma/ode45
   
@@ -251,7 +252,7 @@ integr8 <- function(data, NN0, D, i, t0, tend, dis, y0, p2) {
   th0 <- pmax(1, 1 + 1.87 * ((occ - Hmax) / (SHmax - Hmax)))
   
   locc <- length(occ)
-  pd <- pmin(th0 * t(matrix(rep(dis$pd, locc), ln, locc)), 1) 
+  pd <- pmin(th0 * t(matrix(rep(dis$pd, locc), ntot, locc)), 1) 
   
   Th <- (1 - pd) * dis$Threc + pd * dis$Thd
   mu <- pd / Th
@@ -305,7 +306,6 @@ integr8 <- function(data, NN0, D, i, t0, tend, dis, y0, p2) {
   trate <- c(p2$trate)
   t_tit <- c(p2$t_tit)
   
-  #xx Check this whole iffy statement
   if (i != 5){
       pout <- as.numeric(Ip<trate) * (1 / (1 + exp(params$b0 + params$b1 * Ip + params$b2 * log10(trate)))) / p2$dur +
         as.numeric(Ip >= trate) * pmin(1 / (1 + exp(params$b0 + params$b1 * Ip + params$b2 * log10(trate))), trate / 10^5) / p2$dur 
@@ -336,6 +336,8 @@ integr8 <- function(data, NN0, D, i, t0, tend, dis, y0, p2) {
 
 odes <- function(y, t, params) {
   ntot <- params$ntot
+  
+  p2 <- params$p2
   
   S <- y[1:ntot]
   E <- y[(ntot + 1):(2 * ntot)]
@@ -446,7 +448,7 @@ odes <- function(y, t, params) {
   if (t < p2$t_tit) {
     p3 <- rep(0, ntot)
     p4 <- rep(0, ntot)
-  } else if (t < p2$end && i != 5) {
+  } else if (t < p2$end && params$i != 5) {
     
     Ip  <- 10^5* sum(Ina+Ins+Isa+Iss+Inav1+Insv1+Isav1+Issv1)/sum(NN0)
     trate <- p2$trate
@@ -461,7 +463,6 @@ odes <- function(y, t, params) {
     p3 <- rep(0, ntot)
     p4 <- rep(0, ntot)
   }
-  
   
   # Vaccination
   
@@ -536,6 +537,8 @@ odes <- function(y, t, params) {
   
   # for g
   g <- h * (Ins + Iss) + h_v1 * (Insv1 + Issv1)
+  
+  #browser(expr = {length(f)<980})
   
   return(list(f))#, g #xx
 }
@@ -705,7 +708,7 @@ p2params <- function(data, inp2) {
   up3fun  <- {function(u3) puptake*sum(NNage) - u3*(NNage[2]/2 + NNage[3]) - min(1.5*u3, 1)*NNage[4]}
   if (up3fun(0)*up3fun(1)<=0){
     u3  <- uniroot(up3fun, c(0, 1))#xx Check same
-    u3 <- u3$xmin # xx check uniroot outputs
+    u3 <- u3$xmin #xx Check uniroot outputs
   } else{
     u3  <- fminbnd(up3fun, 0, 1)
     u3 <- u3$xmin
@@ -775,7 +778,7 @@ p2MakeDs <- function(data, NN, x, hw) {
              Npop[5:13]%*%C[5:13,]/sum(Npop[5:13]),
              Npop[2:4]%*%C[2:4,]/sum(Npop[2:4]))
   Cav <- (c(Npop[1],sum(Npop[2:4]),sum(Npop[5:13]),sum(Npop[14:16]))/sum(Npop))%*%rowSums(C)#weighted average of rows
-  C <- data[["comm"]][1,1]*(C/Cav[1,1])#xx better way than as.numeric
+  C <- data[["comm"]][1,1]*(C/Cav[1,1])#xx Better way than as.numeric
   
   ##
   
