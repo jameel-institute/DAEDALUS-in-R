@@ -86,13 +86,12 @@ g <- listOut$g
 
 #Still to translate:
 
-#[cost,~]   = p2Cost(data,dis,p2,g);
-#sec(1)     = sum(cost([3,6,7:10],:),'all');
-#sec(2)     = sum(cost(3,:),'all');
-#sec(3)     = sum(cost(6,:),'all');
-#sec(4)     = sum(cost(7:10,:),'all');
+listCost   <- p2Cost(data,dis,p2,g)
+cost <- listCost$cost
+ccost_t <- listCost$ccost_t
+sec[1]    <- sum(cost[c(3,6,7:10), ])
+sec[2]    <- sum(cost[3, ])
+sec[3]    <- sum(cost[6, ])
+sec[4]    <- sum(cost[c(7:10), ])
 
-#p2Plot(data,f,p2,g,cost);
-
-#simOut <- p2Run(data, dis, Xit, p2)
-  
+#p2Plot(data,f,p2,g,cost)
