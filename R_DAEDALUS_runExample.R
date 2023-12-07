@@ -59,7 +59,7 @@ load("C:/Users/David/Downloads/DAEDALUS-main/singapore.Rdata")
 
 lx        <- length(data$B)
 data$int  <- 5
-data$tvec <- c(-75, seq(data$Tres, 365*3+1, length.out = data$int)) #xx Produces warning
+data$tvec <- c(-75, seq(data$Tres, 365*3+1, length.out = data$int)) #xx Produces 2 warnings
 
 #Create all objects that can be made pre-simulation:
 listOut <- p2params(data, 'Covid Wildtype')
@@ -90,6 +90,7 @@ g <- listOut$g
 listCost   <- p2Cost(data,dis,p2,g)
 cost <- listCost$cost
 ccost_t <- listCost$ccost_t
+sec <- rep(0, 4)
 sec[1]    <- sum(cost[c(3,6,7:10), ])
 sec[2]    <- sum(cost[3, ])
 sec[3]    <- sum(cost[6, ])
