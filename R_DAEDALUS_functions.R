@@ -309,7 +309,7 @@ integr8 <- function(data, NN0, D, i, t0, tend, dis, y0, p2) {
   if (i != 5){
       pout <- as.numeric(Ip<trate) * (1 / (1 + exp(params$b0 + params$b1 * Ip + params$b2 * log10(trate)))) / p2$dur +
         as.numeric(Ip >= trate) * pmin(1 / (1 + exp(params$b0 + params$b1 * Ip + params$b2 * log10(trate))), trate / 10^5) / p2$dur 
-      pout <- pout*as.numeric(tout > t_tit && tout < p2$end)# * which(tout < p2$end)
+      pout <- pout*as.numeric(tout > t_tit & tout < p2$end)# * which(tout < p2$end)
   }else{
     pout <- rep(0, length(tout))
   }
