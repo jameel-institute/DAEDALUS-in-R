@@ -16,11 +16,11 @@
 #install.packages("fastmatrix")
 
 #Access packages:
-#library(R.matlab)
-#library(pracma)
-#library(deSolve)
-#library(ggplot2)
-#library(fastmatrix)
+library(R.matlab)
+library(pracma)
+library(deSolve)
+library(ggplot2)
+library(fastmatrix)
 
 ################################################################################
 #Single run inputs - literally everything you need to change is in this block!
@@ -29,7 +29,7 @@
 country <- "singapore"
 #
 #Copy the file path to your working directory here:
-folder <- "C:/Users/David/Downloads/DAEDALUS-main"
+folder <- "C:/Users/dhaw/Documents/DAEDALUS-main"
 #This directory should contain all files downloaded from GitHub
 #
 setwd(folder)
@@ -55,24 +55,17 @@ save(data, file=newFilename)
 
 source("R_DAEDALUS_diseases.R")
 source("R_DAEDALUS_functions.R")
-load("C:/Users/David/Downloads/DAEDALUS-main/singapore.Rdata")
+load("C:/Users/dhaw/Documents/DAEDALUS-main/singapore.Rdata")
 
 lx        <- length(data$B)
 data$int  <- 5
-data$tvec <- c(-75, seq(data$Tres, 365*3+1, length.out = data$int)) #xx Produces 2 warnings
+data$tvec <- c(-75, seq(from=as.numeric(data$Tres), to=365*3+1, length.out=as.numeric(data$int)))
 
 #Create all objects that can be made pre-simulation:
 listOut <- p2params(data, 'Covid Wildtype')
 data <- listOut$data
 dis <- listOut$dis
 p2 <- listOut$p2
-
-#xx Add missing info:
-p2$startp2 <- data$tvec[2]#p2$startp1+1; 
-p2$startp3 <- data$tvec[3]#p2$startp2+1; 
-p2$startp4 <- data$tvec[4]#p2$startp3+1; 
-p2$startp5 <- data$tvec[5]#p2$startp4+1; 
-p2$end <- data$tvec[6]#p2$startp5+1
 
 #Define economic configuration for all time periods:
 xoptim <- c(rep(1, lx), rep(1, lx), rep(.5, lx), rep(1, lx), rep(1, lx))
@@ -85,6 +78,12 @@ listOut <- p2Run(data, dis, xoptim, p2)
 data <- listOut$data
 f <- listOut$f
 g <- listOut$g
+
+#Simple plot:
+plot(f[,1],f[,3],ylim=c(0,10000),type="l")
+
+colnames(f) <- c("Time", "Infections", "Hospital occ.", "Deaths (cumulative)", "Vacc. coverage",
+                 "Transmission modifier",  "V1", "V2", "V3", "V4", "D1", "D2", "D3", "D4")
 
 #Calculate costs:
 listCost   <- p2Cost(data,dis,p2,g)

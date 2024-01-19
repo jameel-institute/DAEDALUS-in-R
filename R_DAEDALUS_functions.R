@@ -44,6 +44,7 @@ p2Run <- function(data, dis, Xit, p2) {
 p2SimVax <- function(data, NNvec, Dvec, dis, WitMat, p2) {
   
   S0 <- NNvec[, 1]
+  betamod <- 1
   
   ntot <- length(data$NNs)
   adInd <- 3
@@ -98,7 +99,8 @@ p2SimVax <- function(data, NNvec, Dvec, dis, WitMat, p2) {
     #           func = p2Model,
     #           parms = p2)
     #xx David: I *think* the above was a placeholder
-    res <- integr8(data, NNfeed, D, i, t0, tend, dis, y0, p2)
+    res <- integr8(data, NNfeed, D, i, t0, tend, dis, y0, p2, betamod)
+    y0 <- res$y0new
     
     # Extract the results
     end <- length(res$tout)
@@ -171,7 +173,6 @@ p2SimVax <- function(data, NNvec, Dvec, dis, WitMat, p2) {
       #y0[lx + adInd, ] <- y0[lx + adInd, ] + y0h2w #xx
       
       y0 = c(y0)
-      
     }
     
   }
@@ -207,25 +208,18 @@ p2SimVax <- function(data, NNvec, Dvec, dis, WitMat, p2) {
 ################################################################################
 #Integration:
 
-integr8 <- function(data, NN0, D, i, t0, tend, dis, y0, p2) {
+integr8 <- function(data, NN0, D, i, t0, tend, dis, y0, p2, betamod) {
   
   ntot <- length(data$NNs)
   #params <- list(data = data, NN0 = NN0, D = D, i = i, dis = dis, p2 = p2, b0 = 2.197, b1 = 0.1838, b2 = -1.024)
   #xx Copied from inside function "odes":
   params <- list(data = data, NN0 = NN0, D = D, i = i, dis = dis, p2 = p2, ntot = length(data$NNs), 
-                 b0 = 2.197, b1 = 0.1838, b2 = -1.024, phi = 1, betamod = 1, i = i )
-  
+                 b0 = 2.197, b1 = 0.1838, b2 = -1.024, phi = 1, betamod = betamod)
 ################################
   # Define the ODE function
   toSolve  <- {function(t, y, params) odes(y, t, params=params)}#deSolve/ode
-  #toSolve  <- {function(y, t) odes(y, t, params=params)}#pracma/ode45
-  
-  #xx Vector feed to "ode" (deSolve)??
-  # Solve the ODEs
-  #yout <- ode(y = y0, times = seq(t0, tend, by = 0.1), odes, params = params) #deSolve/ode
   
   yout <- ode(y = y0, times = seq(t0, tend, by = 1), toSolve, params, method="ode45")#xx Time intervals different to MATLAB code
-  #yout <- ode45(toSolve, t0, tend, y0) #pracma/ode45
   
   tout <- yout[, "time"]
   y0new <- tail(yout, n = 1)[, -1]
@@ -243,7 +237,7 @@ integr8 <- function(data, NN0, D, i, t0, tend, dis, y0, p2) {
   Hclass   <- yout [,  (6*ntot+1): (7*ntot)] + yout[, (15*ntot+1) :(16*ntot) ]
   Dclass   <- yout [, (17*ntot+1) : (18*ntot) ]
   Vclass   <-  yout [, (18*ntot+1) : (19*ntot) ]
-  
+
   # Time - dependent parameters
   
   occ <- pmax(1, rowSums(Hclass)) #Total occupancy (t)
@@ -262,7 +256,7 @@ integr8 <- function(data, NN0, D, i, t0, tend, dis, y0, p2) {
     c((l - b) + (1 - l + b) * (1 + ((l - 1) / (1 - l + b))))^(x / 10) #xx c() added
   }
   
-  # betamod 
+  # betamod
   if (i == 1) {
     betamod <- rep(1, length(occ))
   } else if (i %in% data$imand) {
@@ -441,13 +435,12 @@ odes <- function(y, t, params) {
   
   seedvec <- rep(10^-15 * sum(data$Npop), ntot)
   seed <- phi * beta * betamod * (D %*% (seedvec / NN0))
-
   
   # Self-Isolation
   
   if (t < p2$t_tit) {
-    p3 <- rep(0, ntot)
-    p4 <- rep(0, ntot)
+    p3 <- 0#rep(0, ntot)
+    p4 <- 0#rep(0, ntot)
   } else if (t < p2$end && params$i != 5) {
     
     Ip  <- 10^5* sum(Ina+Ins+Isa+Iss+Inav1+Insv1+Isav1+Issv1)/sum(NN0)
@@ -460,8 +453,8 @@ odes <- function(y, t, params) {
     p4    <- c(p3)
     
   } else {
-    p3 <- rep(0, ntot)
-    p4 <- rep(0, ntot)
+    p3 <- 0#rep(0, ntot)
+    p4 <- 0#rep(0, ntot)
   }
   
   # Vaccination
@@ -506,6 +499,9 @@ odes <- function(y, t, params) {
     
   }
   
+  #if (t>22){
+  #  browser()
+  #}
   
   # Equations
   
@@ -721,7 +717,8 @@ p2params <- function(data, inp2) {
   uptake  <- c(u1,u2,u3,u4);
   
   #Vaccine Administration Rate
-  t_ages     = min((uptake*NNage)/c(arate), Inf)#arate may be 0
+  t_ages     <- pmin((uptake*NNage)/c(arate), Inf)#arate may be 0 #xx Problem here
+  
   if (inp2=="Influenza 1918"){
     t_ages     <- c(t_ages[3], t_ages[4], t_ages[2], t_ages[1])
     p2$aratep1 <- c(0, 0, arate, 0)#Period 1 - working-age#to be split across all economic sectors in heSimCovid19vax.m
@@ -743,7 +740,6 @@ p2params <- function(data, inp2) {
   p2$end     <- tpoints[5]#End of Rollout
   
   ## COST PARAMETERS:
-  
   
   na    <- c(data$Npop[1:16], sum(data$Npop[17:length(Npop)]))#length is 17 to match ifr
   la   <- c(data$la[1:16], dot(data$la[17:length(data$la)], c(data$Npop[17], sum(data$Npop[18:length(data$Npop)])))/sum(data$Npop[17:length(data$Npop)]))
@@ -776,9 +772,9 @@ p2MakeDs <- function(data, NN, x, hw) {
   C <- rbind(C[1,],
              Npop[2:4]%*%C[2:4,]/sum(Npop[2:4]),
              Npop[5:13]%*%C[5:13,]/sum(Npop[5:13]),
-             Npop[2:4]%*%C[2:4,]/sum(Npop[2:4]))
+             Npop[14:16]%*%C[14:16,]/sum(Npop[14:16]))
   Cav <- (c(Npop[1],sum(Npop[2:4]),sum(Npop[5:13]),sum(Npop[14:16]))/sum(Npop))%*%rowSums(C)#weighted average of rows
-  C <- data[["comm"]][1,1]*(C/Cav[1,1])#xx Better way than as.numeric
+  C <- data$comm[1,1]*(C/Cav[1,1])#xx Better way than as.numeric
   
   ##
   
@@ -834,7 +830,7 @@ p2MakeDs <- function(data, NN, x, hw) {
   x[(lx+1):ln] <- rep(0,ln-lx)
   w[(lx+1):ln] <- rep(0,ln-lx)
   matB <- diag(w*valB)
-  matC <- t(matrix(rep(x*valC,ln),ln,ln))*NNrep
+  matC <- matrix(rep(x*valC,ln),ln,ln)*NNrep
   
   checkExists <- data$wnorm
   if (is.null(checkExists)){#(!exists(data$wnorm)){
