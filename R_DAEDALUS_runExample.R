@@ -6,6 +6,9 @@
 #search for "xx"
 #odes - output g for admissions
 
+#RJ notes 19/1/24
+# remove references to local paths and files
+
 ################################################################################
 
 #Install all of these packages if you haven't already:
@@ -26,25 +29,27 @@ library(fastmatrix)
 #Single run inputs - literally everything you need to change is in this block!
 
 #Pick a country:
-country <- "singapore"
+country <- "Singapore"
 #
 #Copy the file path to your working directory here:
-folder <- "C:/Users/dhaw/Documents/DAEDALUS-main"
+folder <- utils::getSrcDirectory(function(){})
+#"C:/Users/dhaw/Documents/DAEDALUS-main"
 #This directory should contain all files downloaded from GitHub
 #
-setwd(folder)
+setwd(ifelse(folder=='','.',folder))
 
 ################################################################################
 #Only use this block if you need to import any MATLAB objects
 
 #Convert .mat file to R list
-filename <- paste(country,".mat", sep = "", collapse = NULL)
+filename <- paste0('archive/',country,".mat")
 f = readMat(filename, fixNames=TRUE)
 data = f$data
 
-fieldNames <- readMat("dataFieldnames.mat", fixNames=TRUE)
-fieldNames <- unlist(fieldNames$dataFieldnames)
-names(data) <- fieldNames
+# fieldNames <- readMat("dataFieldnames.mat", fixNames=TRUE)
+# fieldNames <- unlist(fieldNames$dataFieldnames)
+rnames <- gsub('\\.','_',rownames(data))
+names(data) <- rnames #fieldNames
 
 #Save as .Rdata
 newFilename <- paste(country,".Rdata", sep = "", collapse = NULL)
@@ -55,7 +60,7 @@ save(data, file=newFilename)
 
 source("R_DAEDALUS_diseases.R")
 source("R_DAEDALUS_functions.R")
-load("C:/Users/dhaw/Documents/DAEDALUS-main/singapore.Rdata")
+load(newFilename)
 
 lx        <- length(data$B)
 data$int  <- 5
