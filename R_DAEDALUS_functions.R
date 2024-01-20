@@ -1,3 +1,9 @@
+################################################################################
+#RJ notes 19/1/24
+# I require real from eigen
+# rename F to Fmat as F=FALSE
+
+################################################################################
 #All functions required to run DAEDALUS for p2
 
 library(pracma)
@@ -618,18 +624,18 @@ p2params <- function(data, inp2) {
   #Transmission
   Deff  <- Dout*matrix(rep(data$NNs,ntot), ntot, ntot)/t(matrix(rep(data$NNs, ntot), ntot, ntot)) # [49 x 49]
   onesn <- rep(1, ntot)
-  F     <- matrix(0, 3*ntot, 3*ntot); 
-  F[1:ntot,(ntot+1):dim(F)[2]] <- cbind(dis$red*Deff, Deff);   # [147 x 147] #xx dis$red scalar
+  Fmat     <- matrix(0, 3*ntot, 3*ntot); 
+  Fmat[1:ntot,(ntot+1):dim(Fmat)[2]] <- cbind(dis$red*Deff, Deff);   # [147 x 147] #xx dis$red scalar
   
   vvec <- c((dis$sig1+dis$sig2)*onesn, dis$g1*onesn, (dis$g2+dis$h)*onesn) #g2 and h are vectors
   V    <- diag(vvec)
   V[(ntot+1):(2*ntot), 1:ntot]   <- diag(-dis$sig1*onesn)
   V[(2*ntot+1):(3*ntot), 1:ntot] <- diag(-dis$sig2*onesn)
   
-  GD <- F%*%inv(V) # [147 x 147]
-  ev <- eigen(GD)#largest in magnitude (+/-)  % 7.29
+  GD <- Fmat%*%inv(V) # [147 x 147]
+  ev <- eigen(GD,only.values = T)#largest in magnitude (+/-)  % 7.29
   d <- ev$values
-  R0a <- max(d) # 7.29
+  R0a <- max(Re(d)) # 7.29
   dis$beta <- dis$R0/R0a#beta scales actual R0 to fitted R0
   
   #Vaccination
