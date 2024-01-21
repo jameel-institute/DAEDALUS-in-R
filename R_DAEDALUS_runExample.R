@@ -24,6 +24,8 @@ library(pracma)
 library(deSolve)
 library(ggplot2)
 library(fastmatrix)
+library(reshape2)
+
 
 ################################################################################
 #Single run inputs - literally everything you need to change is in this block!
@@ -84,10 +86,8 @@ data <- listOut$data
 f <- listOut$f
 g <- listOut$g
 
-#Simple plot:
-plot(f[,1],f[,3],ylim=c(0,10000),type="l")
-
-colnames(f) <- c("Time", "Infections", "Hospital occ.", "Deaths (cumulative)", "Vacc. coverage",
+trajectories <- as.data.frame(f)
+colnames(trajectories) <- c("Day", "Infections", "Hospital occupancy", "Deaths (cumulative)", "Vaccine coverage",
                  "Transmission modifier",  "V1", "V2", "V3", "V4", "D1", "D2", "D3", "D4")
 
 #Calculate costs:
@@ -100,5 +100,6 @@ sec[2]    <- sum(cost[3, ])
 sec[3]    <- sum(cost[6, ])
 sec[4]    <- sum(cost[c(7:10), ])
 
-#Plot stuff:
-#p2Plot(data,f,p2,g,cost)
+
+plots <- p2Plot(data=data,trajectories=trajectories,cost=cost,closures=xoptim)
+
