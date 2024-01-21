@@ -2,12 +2,11 @@
 #RJ notes 19/1/24
 # I require real from eigen
 # rename F to Fmat as F=FALSE
+# rename t to day as t() is the transpose function
 
 ################################################################################
 #All functions required to run DAEDALUS for p2
 
-library(pracma)
-#library(fastmatrix)
 
 ################################################################################
 #Launch simulation:
@@ -101,7 +100,7 @@ p2SimVax <- function(data, NNvec, Dvec, dis, WitMat, p2) {
     
     # Solve the ODE system
     #res <- ode(y = y0,
-    #           t = c(t0, tend),
+    #           day = c(t0, tend),
     #           func = p2Model,
     #           parms = p2)
     #xx David: I *think* the above was a placeholder
@@ -223,7 +222,7 @@ integr8 <- function(data, NN0, D, i, t0, tend, dis, y0, p2, betamod) {
                  b0 = 2.197, b1 = 0.1838, b2 = -1.024, phi = 1, betamod = betamod)
 ################################
   # Define the ODE function
-  toSolve  <- {function(t, y, params) odes(y, t, params=params)}#deSolve/ode
+  toSolve  <- {function(day, y, params) odes(y, day, params=params)}#deSolve/ode
   
   yout <- ode(y = y0, times = seq(t0, tend, by = 1), toSolve, params, method="ode45")#xx Time intervals different to MATLAB code
   
@@ -246,7 +245,7 @@ integr8 <- function(data, NN0, D, i, t0, tend, dis, y0, p2, betamod) {
 
   # Time - dependent parameters
   
-  occ <- pmax(1, rowSums(Hclass)) #Total occupancy (t)
+  occ <- pmax(1, rowSums(Hclass)) #Total occupancy (day)
   Hmax <- p2$Hmax
   SHmax <- p2$SHmax
   th0 <- pmax(1, 1 + 1.87 * ((occ - Hmax) / (SHmax - Hmax)))
@@ -334,7 +333,7 @@ integr8 <- function(data, NN0, D, i, t0, tend, dis, y0, p2, betamod) {
 ################################################################################
 #ODEs:
 
-odes <- function(y, t, params) {
+odes <- function(y, day, params) {
   ntot <- params$ntot
   
   p2 <- params$p2
@@ -444,10 +443,10 @@ odes <- function(y, t, params) {
   
   # Self-Isolation
   
-  if (t < p2$t_tit) {
+  if (day < p2$t_tit) {
     p3 <- 0#rep(0, ntot)
     p4 <- 0#rep(0, ntot)
-  } else if (t < p2$end && params$i != 5) {
+  } else if (day < p2$end && params$i != 5) {
     
     Ip  <- 10^5* sum(Ina+Ins+Isa+Iss+Inav1+Insv1+Isav1+Issv1)/sum(NN0)
     trate <- p2$trate
@@ -467,31 +466,31 @@ odes <- function(y, t, params) {
   
   nonVax = NN0 - V
   
-  if (t >= pend) {
+  if (day >= pend) {
     
     v1rates <- rep(0, ntot)
     v1rater <- rep(0, ntot)
     Vdot <- rep(0, ntot)
     
-  } else if (t>= startp4) {
+  } else if (day>= startp4) {
     
     v1rates <- ratep4*S/nonVax
     v1rater <- ratep4*R/nonVax
     Vdot    <-  ratep4
     
-  } else if (t >= startp3) {
+  } else if (day >= startp3) {
     
     v1rates <- ratep3*S/nonVax
     v1rater <- ratep3*R/nonVax
     Vdot   <- ratep3
     
-  } else if (t>= startp2) {
+  } else if (day>= startp2) {
     
     v1rates <- ratep2*S/nonVax
     v1rater <- ratep2*R/nonVax
     Vdot    <-  ratep2
     
-  } else if (t>=startp1) {
+  } else if (day>=startp1) {
     
     v1rates <- ratep1*S/nonVax
     v1rater <- ratep1*R/nonVax
@@ -505,7 +504,7 @@ odes <- function(y, t, params) {
     
   }
   
-  #if (t>22){
+  #if (day>22){
   #  browser()
   #}
   
@@ -822,7 +821,9 @@ p2MakeDs <- function(data, NN, x, hw) {
   }
   
   #Transport:
-  matA[1:lx,1:lx] <- matA[1:lx,1:lx] + t(matrix(rep(w,lx),lx,lx))*c(data$travelA3)*NNrea*t(matrix(rep(1-hw,lx),lx,lx))#Home working has compound effect
+  matA[1:lx,1:lx] <- 
+    matA[1:lx,1:lx] + 
+    t(matrix(rep(w,lx),lx,lx))*c(data$travelA3)*NNrea*t(matrix(rep(1-hw,lx),lx,lx))*matrix(rep(1-hw,lx),lx,lx)#Home working has compound effect
   
   #Worker-worker and community-worker matrices:
   
@@ -850,8 +851,8 @@ p2MakeDs <- function(data, NN, x, hw) {
 
 p2Cost <- function(data, dis, p2, g) {
   
-  t <- g[, 1]
-  lt <- length(t)
+  day <- g[, 1]
+  lt <- length(day)
   lx <- length(data$obj)
   ln <- lx + 4
   
@@ -888,7 +889,7 @@ p2Cost <- function(data, dis, p2, g) {
   hospts <- g[ ,1 + 2 * lx + 3* ln+Stu]
   deaths <- g[ ,1 + 2 * lx + 4* ln+Stu]
   abs   <- isoasy + isosym + isorec + nissym + hospts + deaths
-  absint <- trapz(t, abs)/365
+  absint <- trapz(day, abs)/365
   cost[5, lx + 1] <- absint
   vsyl_sts <- absint * data$vsy
   cost[6, lx + 1] <- vsyl_sts
@@ -897,15 +898,15 @@ p2Cost <- function(data, dis, p2, g) {
   
   pres <- students - abs
   presl <- pres*(1 - g[, 1 + data$EdInd])
-  preslint <- trapz(t, presl) / 365
+  preslint <- trapz(day, presl) / 365
   cost[5, lx + 2] <- preslint
   vsyl_std <- preslint * data$vsy
   cost[6, lx + 2] <- vsyl_std
   
-  #ccost_t[, ln + lx + 1] <- cumtrapz(t, abs) / 365 * c(data$vsy)
-  #ccost_t[, ln + lx + 2] <- cumtrapz(t, presl) / 365 * c(data$vsy)
-  ccost_t <- cbind(ccost_t, (cumtrapz(t, abs) / 365 * c(data$vsy)))
-  ccost_t <- cbind(ccost_t, cumtrapz(t, presl) / 365 * c(data$vsy))
+  #ccost_t[, ln + lx + 1] <- cumtrapz(day, abs) / 365 * c(data$vsy)
+  #ccost_t[, ln + lx + 2] <- cumtrapz(day, presl) / 365 * c(data$vsy)
+  ccost_t <- cbind(ccost_t, (cumtrapz(day, abs) / 365 * c(data$vsy)))
+  ccost_t <- cbind(ccost_t, cumtrapz(day, presl) / 365 * c(data$vsy))
   
   # SGDPL
   
@@ -920,24 +921,24 @@ p2Cost <- function(data, dis, p2, g) {
   nissym <- g[, (1 + 2 * lx + 2 * ln + notEd)]
   hospts <- g[, (1 + 2 * lx + 3 * ln + notEd)]
   deaths <- g[, (1 + 2 * lx + 4 * ln + notEd)] # number of workers absent
-  abspc <- pmax((isoasy + isosym + isorec + nissym + hospts + deaths) / data$NNs[notEd], 0)  # Percentage of workers absent
+  abspc <- pmax((isoasy + isosym + isorec + nissym + hospts + deaths) / repmat(data$NNs[notEd],nrow(deaths),1), 0)  # Percentage of workers absent
   prespc <- 1 - abspc  # Percentage of workers present
   presx <- prespc^data$alp  # Percentage of GDP output
   absx <- 1 - presx  # Percentage of GDP lost
   
   absxint <- rep(0, dim(absx)[2])
   for (i in 1:dim(absx)[2]){
-    absxint[i] <- trapz(t, absx[, i])
+    absxint[i] <- trapz(day, absx[, i])
   }
   gdpl_lbs <- absxint * data$obj[notEd]
   cost[7, notEd] <- gdpl_lbs
   
   # Labour Demand
   
-  w <- g[, notEd]
+  w <- g[, 1+notEd]
   x <- w^data$alp
   numNotEd <- length(notEd)
-  xint <- diff(t) %*% (1 - head(x, -1)) #xx Check = ROW vector %*% matrix
+  xint <- diff(day) %*% (1 - x[-1,]) #xx Check = ROW vector %*% matrix
   gdpl_lbd <- xint * data$obj[notEd]
   
   cost[8, notEd] <- gdpl_lbd
@@ -947,10 +948,93 @@ p2Cost <- function(data, dis, p2, g) {
   
   cost[10, notEd] <- 0
   
-  ccost_t[, (2 * ln + notEd)] <- cumtrapz(t, absx) * t(matrix(rep(data$obj[notEd], lt), numNotEd, lt))  / lt
-  ccost_t[, (3 * ln + notEd)] <- cumtrapz(t, 1 - x) / lt * data$obj[notEd]
+  ccost_t[, (2 * ln + notEd)] <- cumtrapz(day, absx) * t(matrix(rep(data$obj[notEd], lt), numNotEd, lt))  / lt
+  ccost_t[, (3 * ln + notEd)] <- cumtrapz(day, 1 - x) / lt * data$obj[notEd]
   
-  listCost <- list(cost, ccost_t)
+  listCost <- list(cost=cost, ccost_t=ccost_t)
   return(listCost)
   
 }
+
+p2Plot <- function(data,trajectories,cost,closures){
+  # variables
+  nSectors <- length(data$obj)
+  Hmax <- data$Hmax/1000*sum(data$NNs)
+  GDP <- 365*sum(data$obj)
+  edInd <- data$EdInd
+  calendardays <- data$tvec
+  durations <- diff(calendardays)
+  nPeriods <- length(calendardays)-1
+  middays <- sapply(1:nPeriods,function(x) mean(calendardays[x+0:1]))
+  closuremat <- matrix(closures,ncol=nPeriods)
+  
+  plots <- list()
+  
+  # costs plot
+  plotcosts <- data.frame(costs=c(sum(cost[3, ]),sum(cost[7,]),sum(cost[8,]),cost[6,nSectors+1:2])/GDP,
+                          detail=c('All deaths','Absences','Closures','Absences','Closures'),
+                          xvals=c('Life years','GDP','GDP','Education','Education'))
+  
+  plots[[1]] <- ggplot(plotcosts) + 
+    geom_bar(aes(x=xvals,y=costs,fill=detail),position='stack',stat='identity') +
+    theme_bw(base_size=15) + 
+    scale_fill_manual(values=c(`All deaths`='black',Closures='gold',Absences='hotpink')) +
+    labs(x='',y='Cost, % of GDP',fill='')
+  
+  
+  # closures plot
+  percentsplits <- c('  0-25',' 25-50',' 50-75',' 75-90',' 90-95','95-100','   100')
+  breakpoints <- as.numeric(sapply(percentsplits,function(x)strsplit(x,'-')[[1]][1]))
+  ncols <- length(breakpoints)
+  discxs <- matrix(cut(closuremat*100,breaks=c(breakpoints-1e-6,200),labels=1:ncols),
+                   nrow=nSectors,ncol=nPeriods)
+  df <- data.frame(period=rep(middays,each=nSectors),
+                   duration=rep(durations,each=nSectors),
+                   sector=rep(1:nSectors,nPeriods),
+                   closure=c(discxs[nSectors:1,]))
+  
+  options(repr.plot.width = 1, repr.plot.height = 0.75)
+  plots[[2]] <- ggplot(df, aes(x=period, 
+                               y=sector, 
+                               width=duration, 
+                               fill = factor(closure,levels=1:ncols,labels=percentsplits))) +
+    geom_tile() +
+    scale_fill_manual(values = colorRampPalette(c("black",'red',"yellow","white"))(ncols)) +   
+    theme_bw(base_size=15) +                                 
+    labs(title = "") +
+    scale_x_continuous(name='Day',breaks=calendardays,labels=round(calendardays),expand=c(0,0))+
+    theme(axis.text.x = element_text(angle = 45,  hjust=1,vjust=1)) +
+    # scale_y_continuous(name='',breaks=nSectors:1,labels=short_sec_names,expand=c(0,0))+
+    theme(
+      plot.title = element_text(hjust = 1),        
+      legend.position="bottom", legend.spacing.x = unit(00, 'cm'),legend.box.spacing = unit(0.0, 'cm')) +               
+    guides(fill = guide_legend(nrow = 1,
+                               title.theme = element_text(size=10),title.vjust = .8,title.hjust = 8,title.position = "left",      
+                               label.position="bottom", label.hjust = 0, label.vjust = 0.3, 
+                               label.theme = element_text(size=8,angle = 45),
+                               title = 'Sector open, % ',override.aes=list(colour='black')))
+  
+  
+  # trajectories plot
+  melttraj <- reshape2::melt(trajectories,id.vars='Day')
+  rectangles <- data.frame(xmin=calendardays[1:nPeriods],
+                           xmax=calendardays[-1],
+                           ymin=-Inf,ymax=Inf,
+                           closure=1-apply(closuremat[-edInd,],2,min))
+  hosp_cap <- data.frame(y=Hmax,label='Hospital capacity',variable='Hospital occupancy')
+  nudgey <- ifelse(Hmax>1.5*max(trajectories$`Hospital occupancy`),-0.05*Hmax,0.1*Hmax)
+  plots[[3]] <- ggplot(subset(melttraj,variable%in%c('Infections', 'Hospital occupancy', 'Deaths (cumulative)', 'Vaccine coverage'))) +
+    facet_wrap(~variable,scale='free_y') + 
+    theme_bw(base_size=15) + 
+    geom_rect(data=rectangles,aes(xmin=xmin,xmax=xmax,ymin=ymin,ymax=ymax,alpha=I(closure)),fill='goldenrod1') +
+    geom_hline(data=hosp_cap,aes(yintercept=y),colour='red3') +
+    geom_text(data=hosp_cap,aes(x=median(rectangles$xmax),y=y,label=label),colour='red3',nudge_y = nudgey) +
+    geom_line(aes(x=Day,y=value),size=1.5) + 
+    labs(y='',x='Day')
+  
+  for(i in 1:length(plots)) {x11(); print(plots[[i]])}
+  
+  return(plots)
+}
+
+
