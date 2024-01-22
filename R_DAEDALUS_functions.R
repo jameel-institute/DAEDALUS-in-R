@@ -967,6 +967,8 @@ p2Plot <- function(data,trajectories,cost,closures){
   nPeriods <- length(calendardays)-1
   middays <- sapply(1:nPeriods,function(x) mean(calendardays[x+0:1]))
   closuremat <- matrix(closures,ncol=nPeriods)
+  ##TODO: import sector names
+  sec_names <- 1:nSectors
   
   plots <- list()
   
@@ -983,36 +985,31 @@ p2Plot <- function(data,trajectories,cost,closures){
   
   
   # closures plot
-  percentsplits <- c('  0-25',' 25-50',' 50-75',' 75-90',' 90-95','95-100','   100')
-  breakpoints <- as.numeric(sapply(percentsplits,function(x)strsplit(x,'-')[[1]][1]))
-  ncols <- length(breakpoints)
-  discxs <- matrix(cut(closuremat*100,breaks=c(breakpoints-1e-6,200),labels=1:ncols),
-                   nrow=nSectors,ncol=nPeriods)
-  df <- data.frame(period=rep(middays,each=nSectors),
+  closureplot <- data.frame(period=rep(middays,each=nSectors),
                    duration=rep(durations,each=nSectors),
                    sector=rep(1:nSectors,nPeriods),
-                   closure=c(discxs[nSectors:1,]))
+                   closure=c(100*closuremat[nSectors:1,]))
   
   options(repr.plot.width = 1, repr.plot.height = 0.75)
-  plots[[2]] <- ggplot(df, aes(x=period, 
+  plots[[2]] <- ggplot(closureplot, aes(x=period, 
                                y=sector, 
                                width=duration, 
-                               fill = factor(closure,levels=1:ncols,labels=percentsplits))) +
+                               fill = closure)) + 
     geom_tile() +
-    scale_fill_manual(values = colorRampPalette(c("black",'red',"yellow","white"))(ncols)) +   
+    scale_fill_gradientn(limits=c(0,100),colours = colorRampPalette(c("black",'red',"yellow","white"))(7)) +   
     theme_bw(base_size=15) +                                 
-    labs(title = "") +
-    scale_x_continuous(name='Day',breaks=calendardays,labels=round(calendardays),expand=c(0,0))+
+    labs(title = "",fill='Sector \nopen, %') +
+    scale_x_continuous(name='Day',breaks=calendardays,labels=round(calendardays),expand=c(0,0)) +
     theme(axis.text.x = element_text(angle = 45,  hjust=1,vjust=1)) +
-    # scale_y_continuous(name='',breaks=nSectors:1,labels=short_sec_names,expand=c(0,0))+
+    scale_y_continuous(name='',breaks=nSectors:1,labels=sec_names,expand=c(0,0)) +
     theme(
-      plot.title = element_text(hjust = 1),        
-      legend.position="bottom", legend.spacing.x = unit(00, 'cm'),legend.box.spacing = unit(0.0, 'cm')) +               
-    guides(fill = guide_legend(nrow = 1,
-                               title.theme = element_text(size=10),title.vjust = .8,title.hjust = 8,title.position = "left",      
-                               label.position="bottom", label.hjust = 0, label.vjust = 0.3, 
-                               label.theme = element_text(size=8,angle = 45),
-                               title = 'Sector open, % ',override.aes=list(colour='black')))
+      # plot.title = element_text(vjust = -1),
+      legend.position = "right", 
+      legend.title = element_text(size=12,vjust=2),
+      legend.text = element_text(size=10),
+      # legend.spacing.x = unit(00, 'cm'),
+      # legend.box.spacing = unit(0.0, 'cm'),
+      axis.text.y = element_text(size=8))
   
   
   # trajectories plot
