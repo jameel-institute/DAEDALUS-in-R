@@ -8,6 +8,7 @@
 
 #RJ notes 19/1/24
 # remove references to local paths and files
+# change Rdata to Rds to allow assignment on reading in
 
 ################################################################################
 
@@ -54,15 +55,15 @@ rnames <- gsub('\\.','_',rownames(data))
 names(data) <- rnames #fieldNames
 
 #Save as .Rdata
-newFilename <- paste(country,".Rdata", sep = "", collapse = NULL)
-save(data, file=newFilename)
+newFilename <- paste(country,".Rds", sep = "", collapse = NULL)
+saveRDS(data, file=newFilename)
 
 ################################################################################
 #Source/call DAEDALUS
 
 source("R_DAEDALUS_diseases.R")
 source("R_DAEDALUS_functions.R")
-load(newFilename)
+data <- readRDS(newFilename)
 
 lx        <- length(data$B)
 data$int  <- 5
@@ -87,6 +88,7 @@ f <- listOut$f
 g <- listOut$g
 
 trajectories <- as.data.frame(f)
+##TODO: suggest we name data.frames before return
 colnames(trajectories) <- c("Day", "Infections", "Hospital occupancy", "Deaths (cumulative)", "Vaccine coverage",
                  "Transmission modifier",  "V1", "V2", "V3", "V4", "D1", "D2", "D3", "D4")
 
