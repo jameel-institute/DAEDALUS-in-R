@@ -1026,7 +1026,7 @@ p2Plot <- function(data,trajectories,cost,closures){
     geom_rect(data=rectangles,aes(xmin=xmin,xmax=xmax,ymin=ymin,ymax=ymax,alpha=I(closure)),fill='goldenrod1') +
     geom_hline(data=hosp_cap,aes(yintercept=y),colour='red3') +
     geom_text(data=hosp_cap,aes(x=median(rectangles$xmax),y=y,label=label),colour='red3',nudge_y = nudgey) +
-    geom_line(aes(x=Day,y=value),size=1.5) + 
+    geom_line(aes(x=Day,y=value),linewidth=1.5) + 
     labs(y='',x='Day')
   
   for(i in 1:length(plots)) {x11(); print(plots[[i]])}
