@@ -6,6 +6,10 @@
 #search for "xx"
 #odes - output g for admissions
 
+#RJ notes 19/1/24
+# remove references to local paths and files
+# change Rdata to Rds to allow assignment on reading in
+
 ################################################################################
 
 #Install all of these packages if you haven't already:
@@ -21,41 +25,45 @@ library(pracma)
 library(deSolve)
 library(ggplot2)
 library(fastmatrix)
+library(reshape2)
+
 
 ################################################################################
 #Single run inputs - literally everything you need to change is in this block!
 
 #Pick a country:
-country <- "singapore"
+country <- "Singapore"
 #
 #Copy the file path to your working directory here:
-folder <- "C:/Users/dhaw/Documents/DAEDALUS-main"
+folder <- utils::getSrcDirectory(function(){})
+#"C:/Users/dhaw/Documents/DAEDALUS-main"
 #This directory should contain all files downloaded from GitHub
 #
-setwd(folder)
+setwd(ifelse(folder=='','.',folder))
 
 ################################################################################
 #Only use this block if you need to import any MATLAB objects
 
 #Convert .mat file to R list
-filename <- paste(country,".mat", sep = "", collapse = NULL)
+filename <- paste0('archive/',country,".mat")
 f = readMat(filename, fixNames=TRUE)
 data = f$data
 
-fieldNames <- readMat("dataFieldnames.mat", fixNames=TRUE)
-fieldNames <- unlist(fieldNames$dataFieldnames)
-names(data) <- fieldNames
+# fieldNames <- readMat("dataFieldnames.mat", fixNames=TRUE)
+# fieldNames <- unlist(fieldNames$dataFieldnames)
+rnames <- gsub('\\.','_',rownames(data))
+names(data) <- rnames #fieldNames
 
 #Save as .Rdata
-newFilename <- paste(country,".Rdata", sep = "", collapse = NULL)
-save(data, file=newFilename)
+newFilename <- paste(country,".Rds", sep = "", collapse = NULL)
+saveRDS(data, file=newFilename)
 
 ################################################################################
 #Source/call DAEDALUS
 
 source("R_DAEDALUS_diseases.R")
 source("R_DAEDALUS_functions.R")
-load("C:/Users/dhaw/Documents/DAEDALUS-main/singapore.Rdata")
+data <- readRDS(newFilename)
 
 lx        <- length(data$B)
 data$int  <- 5
@@ -79,10 +87,9 @@ data <- listOut$data
 f <- listOut$f
 g <- listOut$g
 
-#Simple plot:
-plot(f[,1],f[,3],ylim=c(0,10000),type="l")
-
-colnames(f) <- c("Time", "Infections", "Hospital occ.", "Deaths (cumulative)", "Vacc. coverage",
+trajectories <- as.data.frame(f)
+##TODO: suggest we name data.frames before return
+colnames(trajectories) <- c("Day", "Infections", "Hospital occupancy", "Deaths (cumulative)", "Vaccine coverage",
                  "Transmission modifier",  "V1", "V2", "V3", "V4", "D1", "D2", "D3", "D4")
 
 #Calculate costs:
@@ -95,5 +102,6 @@ sec[2]    <- sum(cost[3, ])
 sec[3]    <- sum(cost[6, ])
 sec[4]    <- sum(cost[c(7:10), ])
 
-#Plot stuff:
-#p2Plot(data,f,p2,g,cost)
+
+plots <- p2Plot(data=data,trajectories=trajectories,cost=cost,closures=xoptim)
+
