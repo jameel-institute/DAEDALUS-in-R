@@ -1013,21 +1013,38 @@ p2Plot <- function(data,trajectories,cost,closures){
   
   
   # trajectories plot
+  trajectories$`Vaccine coverage` <- with(trajectories,V1+V2+V3+V4)/sum(data$Npop)
   melttraj <- reshape2::melt(trajectories,id.vars='Day')
   rectangles <- data.frame(xmin=calendardays[1:nPeriods],
                            xmax=calendardays[-1],
                            ymin=-Inf,ymax=Inf,
                            closure=1-apply(closuremat[-edInd,],2,min))
-  hosp_cap <- data.frame(y=Hmax,label='Hospital capacity',variable='Hospital occupancy')
-  nudgey <- ifelse(Hmax>1.5*max(trajectories$`Hospital occupancy`),-0.05*Hmax,0.1*Hmax)
-  plots[[3]] <- ggplot(subset(melttraj,variable%in%c('Infections', 'Hospital occupancy', 'Deaths (cumulative)', 'Vaccine coverage'))) +
-    facet_wrap(~variable,scale='free_y') + 
+  sdcols <- c('Infections', 'Hospital occupancy', 'Deaths (cumulative)', 'Vaccine coverage')
+  statevars <- which(!sdcols%in%'Vaccine coverage')
+  maxvals <- sapply(sdcols,function(x)max(trajectories[[x]]))
+  maxvals['Hospital occupancy'] <- max(maxvals['Hospital occupancy'],Hmax)
+  orders <- ceiling(log10(maxvals))
+  melttraj$order <- orders[melttraj$variable]
+  melttraj$toplot <- melttraj$value/(10^melttraj$order)
+  melttraj$label <- with(melttraj,paste0(variable,ifelse(order==0,'',paste0(' / 1e',order))))
+  Hmaxadj <- Hmax/(10^orders['Hospital occupancy'])
+  hosp_cap <- data.frame(y=Hmaxadj,label='Hospital capacity',variable='Hospital occupancy')
+  nudgey <- ifelse(Hmax>1.5*max(trajectories$`Hospital occupancy`),-0.05*Hmaxadj,0.1*Hmaxadj)
+  
+  transformation <- maxvals['Vaccine coverage']/max(maxvals[statevars]/(10^orders[statevars]))
+  
+  plots[[3]] <- ggplot() +
+    # facet_wrap(~variable,scale='free_y') + 
     theme_bw(base_size=15) + 
     geom_rect(data=rectangles,aes(xmin=xmin,xmax=xmax,ymin=ymin,ymax=ymax,alpha=I(closure)),fill='goldenrod1') +
     geom_hline(data=hosp_cap,aes(yintercept=y),colour='red3') +
-    geom_text(data=hosp_cap,aes(x=median(rectangles$xmax),y=y,label=label),colour='red3',nudge_y = nudgey) +
-    geom_line(aes(x=Day,y=value),linewidth=1.5) + 
-    labs(y='',x='Day')
+    geom_line(data=subset(melttraj,variable%in%sdcols[statevars]),aes(x=Day,y=toplot,colour=label),linewidth=1.5) + 
+    geom_line(data=subset(melttraj,variable%in%'Vaccine coverage'),aes(x=Day,y=toplot/transformation,colour=label),linewidth=1.5) + 
+    geom_text(data=hosp_cap,aes(x=median(rectangles$xmax[1:2]),y=y,label=label),colour='red3',nudge_y = nudgey) +
+    theme(legend.position = 'top') +
+    labs(y='',x='Day',colour='') + 
+    scale_y_continuous(name='State variables',sec.axis = sec_axis( trans=~.*100*transformation, name="Vaccine coverage, %")) + 
+    guides(colour=guide_legend(nrow=2,byrow=TRUE))
   
   for(i in 1:length(plots)) {x11(); print(plots[[i]])}
   
