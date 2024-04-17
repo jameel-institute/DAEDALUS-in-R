@@ -1026,7 +1026,7 @@ p2Plot <- function(data,trajectories,cost,closures){
   orders <- ceiling(log10(maxvals))
   melttraj$order <- orders[melttraj$variable]
   melttraj$toplot <- melttraj$value/(10^melttraj$order)
-  melttraj$label <- with(melttraj,paste0(variable,ifelse(order==0,'',paste0(' / 1e',-order))))
+  melttraj$label <- with(melttraj,paste0(variable,ifelse(order==0,'',paste0(' / 1e',order))))
   Hmaxadj <- Hmax/(10^orders['Hospital occupancy'])
   hosp_cap <- data.frame(y=Hmaxadj,label='Hospital capacity',variable='Hospital occupancy')
   nudgey <- ifelse(Hmax>1.5*max(trajectories$`Hospital occupancy`),-0.05*Hmaxadj,0.1*Hmaxadj)
